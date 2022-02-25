@@ -201,7 +201,7 @@ async def reposition_channel(channel, project_categories):
 
 @bot.event
 async def on_command_error(ctx, error):
-    await ctx.send(str(error))
+    await ctx.reply(str(error))
 
 
 @bot.event

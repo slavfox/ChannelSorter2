@@ -30,6 +30,14 @@ def get_position_in_category(
 
 @bot.command()
 @commands.has_permissions(administrator=True)
+async def get_categories(ctx):
+    await ctx.send(
+        f"Project categories: " f"{[c.name for c in get_project_categories(ctx)]}"
+    )
+
+
+@bot.command()
+@commands.has_permissions(administrator=True)
 async def set_categories(ctx, *categories: discord.CategoryChannel):
     with channels_path.open("w") as f:
         for category in categories:
@@ -78,10 +86,7 @@ async def sort(ctx: discord.ext.commands.Context):
     # Shuffle channels around
     for category in categories:
         for i, channel in enumerate(category_channels[category.id]):
-            if (
-                channel.category_id != category.id
-                or category.channels[i] != channel
-            ):
+            if channel.category_id != category.id or category.channels[i] != channel:
                 old_pos = channel.position
                 new_pos = category.channels[i].position
                 if old_pos > new_pos:
@@ -97,11 +102,14 @@ async def sort(ctx: discord.ext.commands.Context):
                 moves_made += 1
                 channel.category_id = category.id
                 channel.position = new_pos
-                await channel.edit(category=category,
-                                   position=category.channels[i].position)
+                await channel.edit(
+                    category=category, position=category.channels[i].position
+                )
 
-    await ctx.send(f"Channels sorted! Renamed {renames_made} categories and "
-                   f"moved {moves_made} channels.")
+    await ctx.send(
+        f"Channels sorted! Renamed {renames_made} categories and "
+        f"moved {moves_made} channels."
+    )
 
 
 @bot.command()

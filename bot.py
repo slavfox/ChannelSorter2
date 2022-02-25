@@ -7,7 +7,7 @@ from pathlib import Path
 import discord
 from discord.ext import commands
 
-channels_path = Path(__file__).parent.parent / "categories.txt"
+channels_path = Path(__file__).parent / "categories.txt"
 
 bot = commands.Bot(command_prefix="./", description="/r/proglangs discord helper bot")
 
@@ -17,6 +17,15 @@ def get_project_categories(ctx: discord.ext.commands.Context):
         return [
             discord.utils.get(ctx.guild.categories, id=int(line.strip())) for line in f
         ]
+
+
+def get_position_in_category(
+    channel: discord.TextChannel, category: discord.CategoryChannel
+):
+    for i, ch in enumerate(category.channels):
+        if ch.id == channel.id:
+            return i
+    return None
 
 
 @bot.command()
@@ -30,17 +39,22 @@ async def set_categories(ctx, *categories: discord.CategoryChannel):
 
 @bot.command()
 @commands.has_permissions(administrator=True)
-async def sort(ctx):
+async def sort(ctx: discord.ext.commands.Context):
     await ctx.send("Sorting channels!")
+    moves_made = 0
+    renames_made = 0
+
     categories = get_project_categories(ctx)
     channels = []
     for cat in categories:
         channels.extend(cat.channels)
-    channels = sorted(channels, key=lambda channel: channel.name)
+    channels = sorted(channels, key=lambda ch: ch.name)
     category_channels = {}
+
     # rename project categories
     end_idx = 0
     for cat in categories:
+        # Find starting letter ranges
         start_idx = end_idx
         start_letter = channels[start_idx].name[0].upper()
         end_idx = start_idx + (len(channels) // len(categories))
@@ -50,18 +64,44 @@ async def sort(ctx):
             end_letter = channels[end_idx].name[0].upper()
             while channels[end_idx].name[0].upper() == end_letter:
                 end_idx += 1
+
+        # Rename category if necessary
         new_cat_name = f"Projects {start_letter}-{end_letter}"
-        print(f"Renaming {cat.name} to {new_cat_name}")
+        if cat.name != new_cat_name:
+            renames_made += 1
+            print(f"Renaming {cat.name} to {new_cat_name}")
+            await cat.edit(name=new_cat_name)
+
+        # Save channels that should be in the category at the end of the run
         category_channels[cat.id] = channels[start_idx:end_idx]
-        await cat.edit(name=new_cat_name)
 
-    for category in reversed(categories):
+    # Shuffle channels around
+    for category in categories:
         for i, channel in enumerate(category_channels[category.id]):
-            if channel.category != category or channel.position != i:
-                print(f"Moving {channel.name}")
-                await channel.edit(category=category, position=i)
+            if (
+                channel.category_id != category.id
+                or category.channels[i] != channel
+            ):
+                old_pos = channel.position
+                new_pos = category.channels[i].position
+                if old_pos > new_pos:
+                    # moving channel up
+                    for other_channel in channels:
+                        if new_pos <= other_channel.position < old_pos:
+                            other_channel.position += 1
+                else:
+                    # moving channel down
+                    for other_channel in channels:
+                        if old_pos < other_channel.position <= new_pos:
+                            other_channel.position -= 1
+                moves_made += 1
+                channel.category_id = category.id
+                channel.position = new_pos
+                await channel.edit(category=category,
+                                   position=category.channels[i].position)
 
-    await ctx.send("Channels sorted! I hope.")
+    await ctx.send(f"Channels sorted! Renamed {renames_made} categories and "
+                   f"moved {moves_made} channels.")
 
 
 @bot.command()

@@ -2,6 +2,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 import os
+from itertools import chain
 from pathlib import Path
 
 import discord
@@ -12,11 +13,13 @@ channels_path = Path(__file__).parent / "categories.txt"
 bot = commands.Bot(command_prefix="./", description="/r/proglangs discord helper bot")
 
 
-def get_project_categories(ctx: discord.ext.commands.Context):
+def get_project_categories(guild):
     with channels_path.open() as f:
-        return [
-            discord.utils.get(ctx.guild.categories, id=int(line.strip())) for line in f
-        ]
+        return [discord.utils.get(guild.categories, id=int(line.strip())) for line in f]
+
+
+def get_archive_category(guild):
+    return discord.utils.get(guild.categories, name="Archive")
 
 
 def get_position_in_category(
@@ -32,7 +35,7 @@ def get_position_in_category(
 @commands.has_permissions(administrator=True)
 async def get_categories(ctx):
     await ctx.send(
-        f"Project categories: " f"{[c.name for c in get_project_categories(ctx)]}"
+        f"Project categories: " f"{[c.name for c in get_project_categories(ctx.guild)]}"
     )
 
 
@@ -52,11 +55,10 @@ async def sort(ctx: discord.ext.commands.Context):
     moves_made = 0
     renames_made = 0
 
-    categories = get_project_categories(ctx)
-    channels = []
-    for cat in categories:
-        channels.extend(cat.channels)
-    channels = sorted(channels, key=lambda ch: ch.name)
+    categories = get_project_categories(ctx.guild)
+    channels = sorted(
+        chain.from_iterable(c.channels for c in categories), key=lambda ch: ch.name
+    )
     category_channels = {}
 
     # rename project categories
@@ -102,6 +104,7 @@ async def sort(ctx: discord.ext.commands.Context):
                 moves_made += 1
                 channel.category_id = category.id
                 channel.position = new_pos
+                print(f"Moving channel {channel.name}.")
                 await channel.edit(
                     category=category, position=category.channels[i].position
                 )
@@ -138,7 +141,7 @@ async def make_channel(ctx, owner: discord.Member, name: str):
             send_messages=False, add_reactions=False
         ),
     }
-    categories = get_project_categories(ctx)
+    categories = get_project_categories(ctx.guild)
     channels = []
     for cat in categories:
         channels.extend(cat.channels)
@@ -151,7 +154,66 @@ async def make_channel(ctx, owner: discord.Member, name: str):
             category = channel.category
             break
     await new_channel.edit(category=category, position=position, overwrites=overwrites)
-    await ctx.send(f"Set appropriate permissions for {new_channel.mention}. " f"Done!")
+    await ctx.send(f"Set appropriate permissions for {new_channel.mention}. Done!")
+
+
+@bot.command()
+@commands.has_permissions(manage_channels=True)
+async def archive(ctx):
+    """Archive a channel."""
+    await ctx.send("Archiving channel.")
+    await ctx.channel.edit(category=get_archive_category(ctx.guild))
+
+
+@bot.listen("on_message")
+async def on_message(message: discord.Message):
+    """Listen for messages in archived channels to unarchive them."""
+    if (
+        message.guild is None
+        or message.channel.category is None
+        or message.channel.category != get_archive_category(message.guild)
+    ):
+        return
+    await reposition_channel(message.channel, get_project_categories(message.guild))
+    await message.channel.send("Channel unarchived!")
+
+
+async def reposition_channel(channel, project_categories):
+    channels = sorted(
+        (ch for c in project_categories for ch in c.channels if ch.id != channel.id),
+        key=lambda ch: ch.name,
+    )
+    category = None
+    position = 0
+    for c in channels:
+        position = c.position
+        if c.name > channel.name:
+            if not category:
+                category = c.category
+            break
+        category = c.category
+    else:
+        # Channel should be sorted last
+        position += 1
+    await channel.edit(category=category, position=position)
+    print(f"Moved channel {channel.name}")
+
+
+@bot.event
+async def on_command_error(ctx, error):
+    await ctx.send(str(error))
+
+
+@bot.event
+async def on_guild_channel_update(before, after):
+    """Move channels to the correct position if they got renamed."""
+    if not isinstance(after, discord.TextChannel):
+        print(type(after))
+        return
+    categories = get_project_categories(before.guild)
+    if not (after.category in categories and after.name != before.name):
+        return
+    await reposition_channel(after, categories)
 
 
 bot.run(os.getenv("CHANNELSORTER_TOKEN"))

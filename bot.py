@@ -4,6 +4,7 @@
 import os
 from itertools import chain
 from pathlib import Path
+import traceback
 
 import discord
 from discord.ext import commands
@@ -20,15 +21,6 @@ def get_project_categories(guild):
 
 def get_archive_category(guild):
     return discord.utils.get(guild.categories, name="Archive")
-
-
-def get_position_in_category(
-    channel: discord.TextChannel, category: discord.CategoryChannel
-):
-    for i, ch in enumerate(category.channels):
-        if ch.id == channel.id:
-            return i
-    return None
 
 
 @bot.command()
@@ -88,9 +80,16 @@ async def sort(ctx: discord.ext.commands.Context):
     # Shuffle channels around
     for category in categories:
         for i, channel in enumerate(category_channels[category.id]):
-            if channel.category_id != category.id or category.channels[i] != channel:
+            cat_channels = category.channels
+            if len(cat_channels) > i:
+                target_channel = cat_channels[i]
+                new_pos = target_channel.position
+                needs_move = target_channel != channel
+            else:
+                new_pos = cat_channels[-1].position + 1
+                needs_move = cat_channels[-1] != channel
+            if channel.category_id != category.id or needs_move:
                 old_pos = channel.position
-                new_pos = category.channels[i].position
                 if old_pos > new_pos:
                     # moving channel up
                     for other_channel in channels:
@@ -201,6 +200,7 @@ async def reposition_channel(channel, project_categories):
 
 @bot.event
 async def on_command_error(ctx, error):
+    traceback.print_exception(error)
     await ctx.reply(str(error))
 
 

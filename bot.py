@@ -55,20 +55,32 @@ async def sort(ctx: discord.ext.commands.Context):
 
     # rename project categories
     end_idx = 0
-    for cat in categories:
+    for i, cat in enumerate(categories):
         # Find starting letter ranges
         start_idx = end_idx
         start_letter = channels[start_idx].name[0].upper()
         end_idx = start_idx + (len(channels) // len(categories))
-        if end_idx >= len(channels):
+        if i == len(categories) - 1 or end_idx >= len(channels):
+            # last category, should have all channels
+            end_idx = len(channels)
             end_letter = channels[-1].name[0].upper()
         else:
             end_letter = channels[end_idx].name[0].upper()
-            while channels[end_idx].name[0].upper() == end_letter:
-                end_idx += 1
-
+            if end_letter == start_letter:
+                # one letter is large enough to be its own category
+                while channels[end_idx + 1].name[0].upper() == end_letter:
+                    end_idx += 1
+            else:
+                while channels[end_idx - 1].name[0].upper() == end_letter:
+                    end_idx -= 1
+                end_letter = channels[end_idx - 1].name[0].upper()
         # Rename category if necessary
         new_cat_name = f"Projects {start_letter}-{end_letter}"
+        print(
+            f"{new_cat_name}: indices {start_idx}:{end_idx}, "
+            f"channels {channels[start_idx].name}:"
+            f"{channels[end_idx-1].name}"
+        )
         if cat.name != new_cat_name:
             renames_made += 1
             print(f"Renaming {cat.name} to {new_cat_name}")
@@ -208,7 +220,6 @@ async def on_command_error(ctx, error):
 async def on_guild_channel_update(before, after):
     """Move channels to the correct position if they got renamed."""
     if not isinstance(after, discord.TextChannel):
-        print(type(after))
         return
     categories = get_project_categories(before.guild)
     if not (after.category in categories and after.name != before.name):

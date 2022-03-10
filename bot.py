@@ -2,16 +2,20 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 import os
+import traceback
 from itertools import chain
 from pathlib import Path
-import traceback
 
 import discord
 from discord.ext import commands
 
 channels_path = Path(__file__).parent / "categories.txt"
 
-bot = commands.Bot(command_prefix="./", description="/r/proglangs discord helper bot")
+bot = commands.Bot(
+    command_prefix="./",
+    description="/r/proglangs discord helper bot",
+    intents=discord.Intents.all(),
+)
 
 
 def get_project_categories(guild):
@@ -134,8 +138,9 @@ async def make_channel(ctx, owner: discord.Member, name: str):
     role = await ctx.guild.create_role(
         name=f"lang: {name.capitalize()}", colour=discord.Colour.from_rgb(155, 89, 182)
     )
-    await owner.add_roles(role)
-    await ctx.send(f"Created role {role.mention}.")
+    lang_owner_role = discord.utils.get(ctx.guild.roles, name="Lang Channel Owner")
+    await ctx.send(f"Created and assigned role {role.mention}.")
+    await owner.add_roles(role, lang_owner_role)
     channelbot_role = discord.utils.get(ctx.guild.roles, name="Channel Bot")
     muted_role = discord.utils.get(ctx.guild.roles, name="muted")
     overwrites = {

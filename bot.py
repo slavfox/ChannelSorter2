@@ -188,10 +188,20 @@ async def archive(ctx):
 @commands.is_owner()
 async def run_python(ctx, *, code):
     """Run arbitrary Python."""
+    async def aexec(code, globals_, locals_):
+        exec(
+            f'async def __ex(globals, locals): ' +
+            ''.join(f'\n {l}' for l in code.split('\n')),
+            globals_,
+            locals_
+        )
+        return await locals_['__ex'](globals_, locals_)
+
     code = re.match("```(python)?(.*?)```", code, flags=re.DOTALL).group(2)
+    print(f"Running ```{code}```")
     stdout = StringIO()
     with redirect_stdout(stdout):
-        exec(code, globals(), locals())
+        await aexec(code, globals(), locals())
     await ctx.send(f"```\n{stdout.getvalue()}\n```")
 
 

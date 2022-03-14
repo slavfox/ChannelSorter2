@@ -5,6 +5,9 @@ import os
 import traceback
 from itertools import chain
 from pathlib import Path
+import re
+from contextlib import redirect_stdout
+from io import StringIO
 
 import discord
 from discord.ext import commands
@@ -179,6 +182,17 @@ async def archive(ctx):
     """Archive a channel."""
     await ctx.send("Archiving channel.")
     await ctx.channel.edit(category=get_archive_category(ctx.guild))
+
+
+@bot.command()
+@commands.is_owner()
+async def run_python(ctx, *, code):
+    """Run arbitrary Python."""
+    code = re.match("```(python)?(.*?)```", code, flags=re.DOTALL).group(2)
+    stdout = StringIO()
+    with redirect_stdout(stdout):
+        exec(code, globals(), locals())
+    await ctx.send(f"```\n{stdout.getvalue()}\n```")
 
 
 @bot.listen("on_message")

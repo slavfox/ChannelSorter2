@@ -20,6 +20,16 @@ bot = commands.Bot(
     intents=discord.Intents.all(),
 )
 
+CHANNEL_OWNER_PERMS = discord.PermissionOverwrite(
+    send_messages=True,
+    read_messages=True,
+    view_channel=True,
+    manage_channels=True,
+    manage_webhooks=True,
+    # manage_threads=True,
+    manage_messages=True,
+)
+
 
 def get_project_categories(guild):
     with channels_path.open() as f:
@@ -147,14 +157,7 @@ async def make_channel(ctx, owner: discord.Member, name: str):
     channelbot_role = discord.utils.get(ctx.guild.roles, name="Channel Bot")
     muted_role = discord.utils.get(ctx.guild.roles, name="muted")
     overwrites = {
-        role: discord.PermissionOverwrite(
-            manage_channels=True,
-            manage_permissions=True,
-            manage_webhooks=True,
-            # Added in pycord 2.0
-            # manage_threads=True,
-            manage_messages=True,
-        ),
+        role: CHANNEL_OWNER_PERMS,
         channelbot_role: discord.PermissionOverwrite(view_channel=False),
         muted_role: discord.PermissionOverwrite(
             send_messages=False, add_reactions=False
@@ -182,20 +185,27 @@ async def archive(ctx):
     """Archive a channel."""
     await ctx.send("Archiving channel.")
     await ctx.channel.edit(category=get_archive_category(ctx.guild))
+    everyone = discord.utils.get(ctx.guild.roles, name="@everyone")
+    await ctx.channel.set_permissions(everyone, send_messages=False)
+    for role in ctx.channel.overwrites:
+        if role.name.startswith("lang: "):
+            await ctx.channel.set_permissions(role, overwrite=CHANNEL_OWNER_PERMS)
+            break
 
 
 @bot.command()
 @commands.is_owner()
 async def run_python(ctx, *, code):
     """Run arbitrary Python."""
+
     async def aexec(code, globals_, locals_):
         exec(
-            f'async def __ex(globals, locals): ' +
-            ''.join(f'\n {l}' for l in code.split('\n')),
+            f"async def __ex(ctx, globals, locals): "
+            + "".join(f"\n {l}" for l in code.split("\n")),
             globals_,
-            locals_
+            locals_,
         )
-        return await locals_['__ex'](globals_, locals_)
+        return await locals_["__ex"](ctx, globals_, locals_)
 
     code = re.match("```(python)?(.*?)```", code, flags=re.DOTALL).group(2)
     print(f"Running ```{code}```")
@@ -214,6 +224,8 @@ async def on_message(message: discord.Message):
         or message.channel.category != get_archive_category(message.guild)
     ):
         return
+    everyone = discord.utils.get(message.guild.roles, name="@everyone")
+    await message.channel.set_permissions(everyone, overwrite=None)
     await reposition_channel(message.channel, get_project_categories(message.guild))
     await message.channel.send("Channel unarchived!")
 

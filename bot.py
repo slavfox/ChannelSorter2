@@ -149,7 +149,9 @@ async def make_channel(ctx, owner: discord.Member, name: str):
     new_channel = await ctx.guild.create_text_channel(name=name)
     await ctx.send(f"Created channel {new_channel.mention}.")
     role = await ctx.guild.create_role(
-        name=f"lang: {name.capitalize()}", colour=discord.Colour.from_rgb(155, 89, 182)
+        name=f"lang: {name.capitalize()}",
+        colour=discord.Colour.from_rgb(155, 89, 182),
+        mentionable=True,
     )
     lang_owner_role = discord.utils.get(ctx.guild.roles, name="Lang Channel Owner")
     await ctx.send(f"Created and assigned role {role.mention}.")

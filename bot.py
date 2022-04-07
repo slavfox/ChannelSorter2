@@ -8,6 +8,8 @@ from pathlib import Path
 import re
 from contextlib import redirect_stdout
 from io import StringIO
+from typing import List, Dict
+from itertools import combinations
 
 import discord
 from discord.ext import commands
@@ -40,6 +42,44 @@ def get_archive_category(guild):
     return discord.utils.get(guild.categories, name="Archive")
 
 
+def unbalancedness(separator_idxs: List[int]) -> int:
+    score = 0
+    for prev, nxt in zip(separator_idxs[:-1], separator_idxs[1:]):
+        score += (nxt - prev) ** 2
+    return score
+
+
+def balanced_categories(
+    categories: List[discord.CategoryChannel], channels: List[discord.TextChannel]
+) -> Dict[int, List[discord.TextChannel]]:
+    prev_letter = channels[0].name.upper()[0]
+    letter_change_idxs = [0]
+    # Save indices with letter changes
+    for i, channel in enumerate(channels):
+        if channel.name.upper()[0] != prev_letter:
+            prev_letter = channel.name.upper()[0]
+            letter_change_idxs.append(i)
+
+    best_partition = [
+        0,
+        # Find the partition with the smallest unbalancedness
+        *min(
+            combinations(letter_change_idxs, len(categories) - 1),
+            key=lambda partition: unbalancedness([0, *partition, len(channels)]),
+        ),
+    ]
+    assert len(best_partition) == len(categories)
+
+    category_channels = {}
+    # Map categories to their channels
+    for start_idx, category in reversed(list(zip(best_partition, categories))):
+        category_channels[category.id] = channels[start_idx:]
+        channels = channels[:start_idx]
+
+    assert all(category.id in category_channels for category in categories)
+    return category_channels
+
+
 @bot.command()
 @commands.has_permissions(administrator=True)
 async def get_categories(ctx):
@@ -68,43 +108,22 @@ async def sort(ctx: discord.ext.commands.Context):
     channels = sorted(
         chain.from_iterable(c.channels for c in categories), key=lambda ch: ch.name
     )
-    category_channels = {}
-
+    category_channels = balanced_categories(categories, channels)
     # rename project categories
-    end_idx = 0
-    for i, cat in enumerate(categories):
-        # Find starting letter ranges
-        start_idx = end_idx
-        start_letter = channels[start_idx].name[0].upper()
-        end_idx = start_idx + (len(channels) // len(categories))
-        if i == len(categories) - 1 or end_idx >= len(channels):
-            # last category, should have all channels
-            end_idx = len(channels)
-            end_letter = channels[-1].name[0].upper()
-        else:
-            end_letter = channels[end_idx].name[0].upper()
-            if end_letter == start_letter:
-                # one letter is large enough to be its own category
-                while channels[end_idx + 1].name[0].upper() == end_letter:
-                    end_idx += 1
-            else:
-                while channels[end_idx - 1].name[0].upper() == end_letter:
-                    end_idx -= 1
-                end_letter = channels[end_idx - 1].name[0].upper()
+    for cat_id, cat_channels in category_channels.items():
+        category = discord.utils.get(ctx.guild.categories, id=cat_id)
+        start_letter = cat_channels[0].name.upper()[0]
+        end_letter = cat_channels[-1].name.upper()[0]
         # Rename category if necessary
         new_cat_name = f"Projects {start_letter}-{end_letter}"
         print(
-            f"{new_cat_name}: indices {start_idx}:{end_idx}, "
-            f"channels {channels[start_idx].name}:"
-            f"{channels[end_idx-1].name}"
+            f"{new_cat_name}: "
+            f"channels {cat_channels[0].name}:{cat_channels[-1].name}"
         )
-        if cat.name != new_cat_name:
+        if category.name != new_cat_name:
             renames_made += 1
-            print(f"Renaming {cat.name} to {new_cat_name}")
-            await cat.edit(name=new_cat_name)
-
-        # Save channels that should be in the category at the end of the run
-        category_channels[cat.id] = channels[start_idx:end_idx]
+            print(f"Renaming {category.name} to {new_cat_name}")
+            await category.edit(name=new_cat_name)
 
     # Shuffle channels around
     for category in categories:

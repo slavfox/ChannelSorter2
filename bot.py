@@ -8,6 +8,8 @@ from pathlib import Path
 import re
 from contextlib import redirect_stdout
 from io import StringIO
+from sys import maxsize
+from collections import Counter
 
 import discord
 from discord.ext import commands
@@ -40,6 +42,41 @@ def get_archive_category(guild):
     return discord.utils.get(guild.categories, name="Archive")
 
 
+def score(arr): 
+    return sum(e**2 for e in arr)
+
+
+def idx_div(arr, idxs): 
+    return [sum(arr[i:j]) for i, j in zip((0,) + idxs, idxs + (len(arr),))]
+
+# `arr` is an array of sizes
+# `m` is the number of groups
+# returns indices that divides `arr` up
+# into groups of roughly the same size
+def balance_categories(arr, m): 
+    m -= 1
+    global best
+    global top_score
+    best = (0,) * m
+    top_score = maxsize
+    arr_len = len(arr)
+
+    def bal_cat_rec(m, i, cur_indices): 
+        global best
+        global top_score
+        if m == 0: 
+            new_score = score(idx_div(arr, cur_indices))
+            if new_score < top_score: 
+                top_score = new_score
+                best = cur_indices
+        else: 
+            for j in range(i, arr_len): 
+                bal_cat_rec(m-1, j+1, cur_indices + (j,))
+
+    bal_cat_rec(m, 0, ())
+    return list(best)
+
+
 @bot.command()
 @commands.has_permissions(administrator=True)
 async def get_categories(ctx):
@@ -56,7 +93,6 @@ async def set_categories(ctx, *categories: discord.CategoryChannel):
             f.write(str(category.id) + "\n")
     await ctx.send(f"New project categories: {[c.name for c in categories]}")
 
-
 @bot.command()
 @commands.has_permissions(administrator=True)
 async def sort(ctx: discord.ext.commands.Context):
@@ -70,27 +106,18 @@ async def sort(ctx: discord.ext.commands.Context):
     )
     category_channels = {}
 
-    # rename project categories
-    end_idx = 0
-    for i, cat in enumerate(categories):
-        # Find starting letter ranges
-        start_idx = end_idx
-        start_letter = channels[start_idx].name[0].upper()
-        end_idx = start_idx + (len(channels) // len(categories))
-        if i == len(categories) - 1 or end_idx >= len(channels):
-            # last category, should have all channels
-            end_idx = len(channels)
-            end_letter = channels[-1].name[0].upper()
-        else:
-            end_letter = channels[end_idx].name[0].upper()
-            if end_letter == start_letter:
-                # one letter is large enough to be its own category
-                while channels[end_idx + 1].name[0].upper() == end_letter:
-                    end_idx += 1
-            else:
-                while channels[end_idx - 1].name[0].upper() == end_letter:
-                    end_idx -= 1
-                end_letter = channels[end_idx - 1].name[0].upper()
+    # balanced categorizer
+    letters = [ch.name[0].upper() for ch in channels]
+    alpha_counter = sorted(Counter("".join(letters)).items())
+    counts = list(map(lambda x: x[1], alpha_counter))
+    idxs = balance_categories(counts, len(categories))
+    for k, (i, j) in enumerate(zip([0] + idxs, idxs + [len(counts)])): 
+        start_idx = sum(counts[:i])
+        end_idx = start_idx + sum(counts[i:j])
+        start_letter = letters[start_idx]
+        end_letter = letters[end_idx - 1]
+        cat = categories[k]
+
         # Rename category if necessary
         new_cat_name = f"Projects {start_letter}-{end_letter}"
         print(

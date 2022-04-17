@@ -13,14 +13,32 @@ from typing import List, Dict
 from itertools import combinations
 
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 
 channels_path = Path(__file__).parent / "categories.txt"
 
-bot = commands.Bot(
+
+class ChannelBot(commands.Bot):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.hourly_update.start()
+
+    @tasks.loop(hours=1)
+    async def hourly_update(self):
+        for guild in bot.guilds:
+            log_channel = get_log_channel(guild)
+            if log_channel is None:
+                continue
+            print(f"Running hourly update in {guild.name}")
+            await archive_inactive_inner(guild, log_channel, verbose=False)
+            await sort_inner(guild, log_channel, verbose=False)
+
+
+bot = ChannelBot(
     command_prefix="./",
     description="/r/proglangs discord helper bot",
     intents=discord.Intents.all(),
+    activity=discord.Game(name="https://github.com/slavfox/ChannelSorter2/"),
 )
 
 CHANNEL_OWNER_PERMS = discord.PermissionOverwrite(
@@ -36,11 +54,18 @@ CHANNEL_OWNER_PERMS = discord.PermissionOverwrite(
 
 def get_project_categories(guild):
     with channels_path.open() as f:
-        return [discord.utils.get(guild.categories, id=int(line.strip())) for line in f]
+        return [
+            discord.utils.get(guild.categories, id=int(line.strip()))
+            for line in f
+        ]
 
 
 def get_archive_category(guild):
     return discord.utils.get(guild.categories, name="Archive")
+
+
+def get_log_channel(guild):
+    return discord.utils.get(guild.channels, name="channelbot-logs")
 
 
 def unbalancedness(separator_idxs: List[int]) -> int:
@@ -51,7 +76,8 @@ def unbalancedness(separator_idxs: List[int]) -> int:
 
 
 def balanced_categories(
-    categories: List[discord.CategoryChannel], channels: List[discord.TextChannel]
+    categories: List[discord.CategoryChannel],
+    channels: List[discord.TextChannel],
 ) -> Dict[int, List[discord.TextChannel]]:
     prev_letter = channels[0].name.upper()[0]
     letter_change_idxs = [0]
@@ -66,7 +92,9 @@ def balanced_categories(
         # Find the partition with the smallest unbalancedness
         *min(
             combinations(letter_change_idxs, len(categories) - 1),
-            key=lambda partition: unbalancedness([0, *partition, len(channels)]),
+            key=lambda partition: unbalancedness(
+                [0, *partition, len(channels)]
+            ),
         ),
     ]
     assert len(best_partition) == len(categories)
@@ -85,7 +113,8 @@ def balanced_categories(
 @commands.has_permissions(administrator=True)
 async def get_categories(ctx):
     await ctx.send(
-        f"Project categories: " f"{[c.name for c in get_project_categories(ctx.guild)]}"
+        f"Project categories: "
+        f"{[c.name for c in get_project_categories(ctx.guild)]}"
     )
 
 
@@ -101,18 +130,30 @@ async def set_categories(ctx, *categories: discord.CategoryChannel):
 @bot.command()
 @commands.has_permissions(administrator=True)
 async def sort(ctx: discord.ext.commands.Context):
-    await ctx.send("Sorting channels!")
+    """Sort project channels."""
+    return await sort_inner(ctx.guild, ctx.channel)
+
+
+async def sort_inner(
+    guild: discord.Guild,
+    log_channel: discord.TextChannel,
+    verbose: bool = True,
+):
+    if verbose:
+        await log_channel.send("Sorting channels!")
+
     moves_made = 0
     renames_made = 0
 
-    categories = get_project_categories(ctx.guild)
+    categories = get_project_categories(guild)
     channels = sorted(
-        chain.from_iterable(c.channels for c in categories), key=lambda ch: ch.name
+        chain.from_iterable(c.channels for c in categories),
+        key=lambda ch: ch.name,
     )
     category_channels = balanced_categories(categories, channels)
     # rename project categories
     for cat_id, cat_channels in category_channels.items():
-        category = discord.utils.get(ctx.guild.categories, id=cat_id)
+        category = discord.utils.get(guild.categories, id=cat_id)
         start_letter = cat_channels[0].name.upper()[0]
         end_letter = cat_channels[-1].name.upper()[0]
         # Rename category if necessary
@@ -123,7 +164,10 @@ async def sort(ctx: discord.ext.commands.Context):
         )
         if category.name != new_cat_name:
             renames_made += 1
-            print(f"Renaming {category.name} to {new_cat_name}")
+            if verbose:
+                await log_channel.send(
+                    f"Renaming {category.name} to {new_cat_name}"
+                )
             await category.edit(name=new_cat_name)
 
     # Shuffle channels around
@@ -157,10 +201,11 @@ async def sort(ctx: discord.ext.commands.Context):
                     category=category, position=category.channels[i].position
                 )
 
-    await ctx.send(
-        f"Channels sorted! Renamed {renames_made} categories and "
-        f"moved {moves_made} channels."
-    )
+    if verbose or renames_made > 0 or moves_made > 0:
+        await log_channel.send(
+            f"Channels sorted! Renamed {renames_made} categories and "
+            f"moved {moves_made} channels."
+        )
 
 
 @bot.command()
@@ -173,7 +218,9 @@ async def make_channel(ctx, owner: discord.Member, name: str):
         colour=discord.Colour.default(),
         mentionable=True,
     )
-    lang_owner_role = discord.utils.get(ctx.guild.roles, name="Lang Channel Owner")
+    lang_owner_role = discord.utils.get(
+        ctx.guild.roles, name="Lang Channel Owner"
+    )
     await ctx.send(f"Created and assigned role {role.mention}.")
     await owner.add_roles(role, lang_owner_role)
     channelbot_role = discord.utils.get(ctx.guild.roles, name="Channel Bot")
@@ -197,8 +244,12 @@ async def make_channel(ctx, owner: discord.Member, name: str):
             position = channel.position
             category = channel.category
             break
-    await new_channel.edit(category=category, position=position, overwrites=overwrites)
-    await ctx.send(f"Set appropriate permissions for {new_channel.mention}. Done!")
+    await new_channel.edit(
+        category=category, position=position, overwrites=overwrites
+    )
+    await ctx.send(
+        f"Set appropriate permissions for {new_channel.mention}. Done!"
+    )
 
 
 @bot.command()
@@ -211,7 +262,9 @@ async def archive(ctx):
     await ctx.channel.set_permissions(everyone, send_messages=False)
     for role in ctx.channel.overwrites:
         if role.name.startswith("lang: "):
-            await ctx.channel.set_permissions(role, overwrite=CHANNEL_OWNER_PERMS)
+            await ctx.channel.set_permissions(
+                role, overwrite=CHANNEL_OWNER_PERMS
+            )
             break
 
 
@@ -244,11 +297,20 @@ async def inactive(ctx):
 @commands.has_permissions(administrator=True)
 async def archive_inactive(ctx):
     """Archive inactive channels."""
-    await ctx.send(f"Archiving inactive project channels.")
+    return await archive_inactive_inner(ctx.guild, ctx.channel)
+
+
+async def archive_inactive_inner(
+    guild: discord.Guild,
+    log_channel: discord.TextChannel,
+    verbose: bool = True,
+):
+    if verbose:
+        await log_channel.send(f"Archiving inactive project channels.")
     archived = 0
     channel: discord.TextChannel
     for channel in chain.from_iterable(
-        c.channels for c in get_project_categories(ctx.guild)
+        c.channels for c in get_project_categories(guild)
     ):
         try:
             last_message, *_ = await channel.history(limit=1).flatten()
@@ -257,20 +319,25 @@ async def archive_inactive(ctx):
         time_since = datetime.now() - last_message.created_at
         if time_since.days <= 90:
             continue
+        if verbose:
+            await log_channel.send(f"Archiving {channel.mention}.")
         await channel.send(
             "Archiving channel due to inactivity. "
             "If you're the channel owner, send a message here to unarchive."
         )
-        await channel.edit(category=get_archive_category(ctx.guild))
-        everyone = discord.utils.get(ctx.guild.roles, name="@everyone")
+        await channel.edit(category=get_archive_category(guild))
+        everyone = discord.utils.get(guild.roles, name="@everyone")
         await channel.set_permissions(everyone, send_messages=False)
         for role in channel.overwrites:
             if role.name.startswith("lang: "):
-                await channel.set_permissions(role, overwrite=CHANNEL_OWNER_PERMS)
+                await channel.set_permissions(
+                    role, overwrite=CHANNEL_OWNER_PERMS
+                )
                 break
         archived += 1
 
-    await ctx.send(f"Archived {archived} inactive channels.")
+    if verbose or archived > 0:
+        await log_channel.send(f"Archived {archived} inactive channels.")
 
 
 @bot.command()
@@ -306,13 +373,20 @@ async def on_message(message: discord.Message):
         return
     everyone = discord.utils.get(message.guild.roles, name="@everyone")
     await message.channel.set_permissions(everyone, overwrite=None)
-    await reposition_channel(message.channel, get_project_categories(message.guild))
+    await reposition_channel(
+        message.channel, get_project_categories(message.guild)
+    )
     await message.channel.send("Channel unarchived!")
 
 
 async def reposition_channel(channel, project_categories):
     channels = sorted(
-        (ch for c in project_categories for ch in c.channels if ch.id != channel.id),
+        (
+            ch
+            for c in project_categories
+            for ch in c.channels
+            if ch.id != channel.id
+        ),
         key=lambda ch: ch.name,
     )
     category = None

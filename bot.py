@@ -3,6 +3,7 @@
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 import os
 import traceback
+from datetime import datetime
 from itertools import chain
 from pathlib import Path
 import re
@@ -169,7 +170,7 @@ async def make_channel(ctx, owner: discord.Member, name: str):
     await ctx.send(f"Created channel {new_channel.mention}.")
     role = await ctx.guild.create_role(
         name=f"lang: {name.capitalize()}",
-        colour=discord.Colour.from_rgb(155, 89, 182),
+        colour=discord.Colour.default(),
         mentionable=True,
     )
     lang_owner_role = discord.utils.get(ctx.guild.roles, name="Lang Channel Owner")
@@ -212,6 +213,64 @@ async def archive(ctx):
         if role.name.startswith("lang: "):
             await ctx.channel.set_permissions(role, overwrite=CHANNEL_OWNER_PERMS)
             break
+
+
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def inactive(ctx):
+    """Print inactive channels."""
+    await ctx.send(f"Looking for inactive project channels.")
+    inactive_channels = 0
+    channel: discord.TextChannel
+    for channel in chain.from_iterable(
+        c.channels for c in get_project_categories(ctx.guild)
+    ):
+        try:
+            last_message, *_ = await channel.history(limit=1).flatten()
+        except IndexError:
+            continue
+        time_since = datetime.now() - last_message.created_at
+        if time_since.days > 90:
+            await ctx.send(
+                f"{channel.mention} is inactive, last message "
+                f"{time_since.days} days ago."
+            )
+            inactive_channels += 1
+
+    await ctx.send(f"Found {inactive_channels} inactive channels.")
+
+
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def archive_inactive(ctx):
+    """Archive inactive channels."""
+    await ctx.send(f"Archiving inactive project channels.")
+    archived = 0
+    channel: discord.TextChannel
+    for channel in chain.from_iterable(
+        c.channels for c in get_project_categories(ctx.guild)
+    ):
+        try:
+            last_message, *_ = await channel.history(limit=1).flatten()
+        except IndexError:
+            continue
+        time_since = datetime.now() - last_message.created_at
+        if time_since.days <= 90:
+            continue
+        await channel.send(
+            "Archiving channel due to inactivity. "
+            "If you're the channel owner, send a message here to unarchive."
+        )
+        await channel.edit(category=get_archive_category(ctx.guild))
+        everyone = discord.utils.get(ctx.guild.roles, name="@everyone")
+        await channel.set_permissions(everyone, send_messages=False)
+        for role in channel.overwrites:
+            if role.name.startswith("lang: "):
+                await channel.set_permissions(role, overwrite=CHANNEL_OWNER_PERMS)
+                break
+        archived += 1
+
+    await ctx.send(f"Archived {archived} inactive channels.")
 
 
 @bot.command()

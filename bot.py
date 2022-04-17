@@ -38,7 +38,6 @@ bot = ChannelBot(
     command_prefix="./",
     description="/r/proglangs discord helper bot",
     intents=discord.Intents.all(),
-    activity=discord.Game(name="https://github.com/slavfox/ChannelSorter2/"),
 )
 
 CHANNEL_OWNER_PERMS = discord.PermissionOverwrite(

@@ -367,6 +367,31 @@ async def run_python(ctx, *, code):
     await ctx.send(f"```\n{stdout.getvalue()}\n\n{stderr.getvalue()}```")
 
 
+@bot.command(name="eval")
+@commands.is_owner()
+async def eval_python(ctx, *, expr):
+    """Eval an arbitrary python expression."""
+    print(f"Evaluating `{expr}`")
+    stdout = StringIO()
+    stderr = StringIO()
+    with redirect_stdout(stdout), redirect_stderr(stderr):
+        result = eval(expr.strip(), globals(), locals())
+
+    embed = discord.Embed(
+        title=f"Python expression",
+        description=f"```python\n>>> {expr}\n{result}\n```",
+        colour=discord.Colour.green(),
+    )
+
+    stdout = stdout.getvalue()
+    if stdout:
+        embed.add_field(name="Stdout", value=stdout)
+    stderr = stderr.getvalue()
+    if stderr:
+        embed.add_field(name="Stderr", value=stderr)
+    await ctx.send(embed=embed)
+
+
 @bot.command()
 @commands.has_permissions(administrator=True)
 async def change_presence(ctx):

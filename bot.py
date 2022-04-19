@@ -6,6 +6,10 @@ import json
 import os
 import random
 import re
+import socket
+import subprocess
+import sys
+import time
 import traceback
 from contextlib import redirect_stderr, redirect_stdout
 from datetime import datetime
@@ -16,9 +20,12 @@ from typing import Dict, List
 from urllib.request import urlopen
 
 import discord
+import psutil as psutil
 from discord.ext import commands, tasks
 
 channels_path = Path(__file__).parent / "categories.txt"
+
+GiB = 1024**3
 
 
 class ChannelBot(commands.Bot):
@@ -341,58 +348,6 @@ async def archive_inactive_inner(
 
 
 @bot.command()
-@commands.is_owner()
-async def run_python(ctx, *, code):
-    """Run arbitrary Python."""
-
-    async def aexec(source, globals_, locals_):
-        exec(
-            "async def __ex(ctx, globals, locals): "
-            + "".join(f"\n {line}" for line in source.split("\n")),
-            globals_,
-            locals_,
-        )
-        try:
-            return await locals_["__ex"](ctx, globals_, locals_)
-        except Exception as e:
-            await ctx.reply(f"⚠️ {e}")
-            raise e
-
-    code = re.match("```(python)?(.*?)```", code, flags=re.DOTALL).group(2)
-    print(f"Running ```{code}```")
-    stdout = StringIO()
-    stderr = StringIO()
-    with redirect_stdout(stdout), redirect_stderr(stderr):
-        await aexec(code, globals(), locals())
-    await ctx.send(f"```\n{stdout.getvalue()}\n\n{stderr.getvalue()}```")
-
-
-@bot.command(name="eval")
-@commands.is_owner()
-async def eval_python(ctx, *, expr):
-    """Eval an arbitrary python expression."""
-    print(f"Evaluating `{expr}`")
-    stdout = StringIO()
-    stderr = StringIO()
-    with redirect_stdout(stdout), redirect_stderr(stderr):
-        result = eval(expr.strip(), globals(), locals())
-
-    embed = discord.Embed(
-        title=f"Python expression",
-        description=f"```python\n>>> {expr}\n{result!r}\n```",
-        colour=discord.Colour.green(),
-    )
-
-    stdout = stdout.getvalue()
-    if stdout:
-        embed.add_field(name="Stdout", value=stdout)
-    stderr = stderr.getvalue()
-    if stderr:
-        embed.add_field(name="Stderr", value=stderr)
-    await ctx.send(embed=embed)
-
-
-@bot.command()
 @commands.has_permissions(administrator=True)
 async def change_presence(ctx):
     """Change the bot's presence."""
@@ -481,6 +436,147 @@ def get_random_top100_steam_game() -> str:
     )
     game = random.choice(list(games.keys()))
     return games[game]["name"]
+
+
+def system_temperature() -> float:
+    """Get the current system temperature."""
+    try:
+        return json.loads(
+            subprocess.run(["sensors", "-j"], stdout=subprocess.PIPE).stdout
+        )["coretemp-isa-0000"]["Package id 0"]["temp1_input"]
+    except (KeyError, json.decoder.JSONDecodeError):
+        return 40.0
+
+
+def disk_usage_str() -> str:
+    """Return a Discord-formatted representation of total disk usage."""
+    partitions = psutil.disk_partitions()
+    total = 0
+    used = 0
+    seen_devices = set()
+    for p in partitions:
+        try:
+            usage = psutil.disk_usage(p.mountpoint)
+            if p.device not in seen_devices:
+                total += usage.total
+            used += usage.used
+        except PermissionError:
+            pass
+        seen_devices.add(p.device)
+
+    return (
+        f"`{(used / total) * 100:.2f}%` "
+        f"`({used / GiB:.2f}/{total / GiB:.2f} GiB`)"
+    )
+
+
+@bot.command()
+@commands.is_owner()
+async def run_python(ctx, *, code):
+    """Run arbitrary Python."""
+
+    async def aexec(source, globals_, locals_):
+        exec(
+            "async def __ex(ctx, globals, locals): "
+            + "".join(f"\n {line}" for line in source.split("\n")),
+            globals_,
+            locals_,
+        )
+        try:
+            return await locals_["__ex"](ctx, globals_, locals_)
+        except Exception as e:
+            await ctx.reply(f"⚠️ {e}")
+            raise e
+
+    code = re.match("```(python)?(.*?)```", code, flags=re.DOTALL).group(2)
+    print(f"Running ```{code}```")
+    stdout = StringIO()
+    stderr = StringIO()
+    with redirect_stdout(stdout), redirect_stderr(stderr):
+        await aexec(code, globals(), locals())
+    await ctx.send(f"```\n{stdout.getvalue()}\n\n{stderr.getvalue()}```")
+
+
+@bot.command(name="eval")
+@commands.is_owner()
+async def eval_python(ctx, *, expr):
+    """Eval an arbitrary python expression."""
+    print(f"Evaluating `{expr}`")
+    stdout = StringIO()
+    stderr = StringIO()
+    with redirect_stdout(stdout), redirect_stderr(stderr):
+        result = eval(expr.strip(), globals(), locals())
+
+    embed = discord.Embed(
+        title=f"Python expression",
+        description=f"```python\n>>> {expr}\n{result!r}\n```",
+        colour=discord.Colour.green(),
+    )
+
+    stdout = stdout.getvalue()
+    if stdout:
+        embed.add_field(name="Stdout", value=stdout)
+    stderr = stderr.getvalue()
+    if stderr:
+        embed.add_field(name="Stderr", value=stderr)
+    await ctx.send(embed=embed)
+
+
+@bot.command()
+@commands.is_owner()
+async def restart(ctx):
+    """Restart the bot."""
+    await ctx.send("Pulling latest code...")
+    subprocess.run(["git", "pull"], cwd=Path(__file__).parent.resolve())
+    await ctx.send("✅ Code updated!")
+    await ctx.send("Restarting!")
+    os.execl(sys.executable, sys.executable, *sys.argv)
+
+
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def status(ctx):
+    """Display various system information."""
+    start = time.perf_counter()
+    uptime = (
+        subprocess.run(["uptime", "-p"], stdout=subprocess.PIPE)
+        .stdout.decode("utf-8")
+        .strip()
+    )
+    virtual_memory = psutil.virtual_memory()
+    total_memory = virtual_memory.total / GiB
+    used_memory = (virtual_memory.total - virtual_memory.available) / GiB
+    embed = discord.Embed(
+        title=f"`channelsorter@{socket.gethostname()}`",
+        description=uptime,
+        colour=discord.Colour.green(),
+    )
+    embed.set_image(url=bot.user.avatar_url_as(size=128))
+    embed.add_field(
+        name="Python version", value=f"`{sys.version}`", inline=False
+    )
+    embed.add_field(
+        name="Latency", value=f"`{bot.latency*1000:n} ms`", inline=False
+    )
+    embed.add_field(
+        name="CPU usage", value=f"`{psutil.cpu_percent():n}%`", inline=False
+    )
+    embed.add_field(
+        name="CPU temperature",
+        value=f"`{system_temperature()}°C`",
+        inline=False,
+    )
+    embed.add_field(
+        name="Memory usage",
+        value=f"`{virtual_memory.percent}%` "
+        f"(`{used_memory:.2f}/{total_memory:.2f} GiB`)",
+        inline=False,
+    )
+    embed.add_field(name="Disk space", value=disk_usage_str(), inline=False)
+    await ctx.send(
+        f"Diagnostic finished in: `{(time.perf_counter() - start)*1000:n} ms`",
+        embed=embed,
+    )
 
 
 bot.run(os.getenv("CHANNELSORTER_TOKEN"))

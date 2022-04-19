@@ -24,25 +24,21 @@ channels_path = Path(__file__).parent / "categories.txt"
 class ChannelBot(commands.Bot):
     """Discordpy bot subclass with convenience methods we need."""
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.hourly_update.start()
-
     @tasks.loop(hours=1)
     async def hourly_update(self):
         """Clean up channel list and cycle presence."""
-        await bot.change_presence(
+        await self.change_presence(
             activity=discord.Activity(
                 type=discord.ActivityType.watching,
                 name="over the project channels",
             )
         )
-        for guild in bot.guilds:
+        for guild in self.guilds:
             log_channel = get_log_channel(guild)
             if log_channel is None:
                 continue
             print(f"Running hourly update in {guild.name}")
-            await archive_inactive_inner(guild, log_channel, verbose=True)
+            await archive_inactive_inner(guild, log_channel, verbose=False)
             await sort_inner(guild, log_channel, verbose=False)
         await self.change_presence(
             activity=discord.Game(name=get_random_top100_steam_game())
@@ -51,9 +47,7 @@ class ChannelBot(commands.Bot):
     async def on_ready(self):
         """Set initial presence."""
         print(f"Successfully logged in as {self.user}")
-        await self.change_presence(
-            activity=discord.Game(name=get_random_top100_steam_game())
-        )
+        self.hourly_update.start()
 
 
 bot = ChannelBot(
@@ -324,10 +318,9 @@ async def archive_inactive_inner(
         time_since = datetime.now() - last_message.created_at
         if time_since.days <= 90:
             continue
-        if verbose:
-            await log_channel.send(
-                f"Archiving {channel.mention} due to inactivity."
-            )
+        await log_channel.send(
+            f"Archiving {channel.mention} due to inactivity."
+        )
         await channel.send(
             "Archiving channel due to inactivity. "
             "If you're the channel owner, send a message here to unarchive."

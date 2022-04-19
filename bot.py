@@ -376,6 +376,7 @@ async def change_presence(ctx):
     )
     await ctx.send("✅ Done!")
 
+
 @bot.listen("on_message")
 async def on_message(message: discord.Message) -> None:
     """Listen for messages in archived channels to unarchive them."""
@@ -389,6 +390,9 @@ async def on_message(message: discord.Message) -> None:
     await message.channel.set_permissions(everyone, overwrite=None)
     await reposition_channel(
         message.channel, get_project_categories(message.guild)
+    )
+    await get_log_channel(message.guild).send(
+        f"Channel {message.channel.mention} unarchived."
     )
     await message.channel.send("Channel unarchived!")
 

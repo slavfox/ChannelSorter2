@@ -7,7 +7,7 @@ from datetime import datetime
 from itertools import chain
 from pathlib import Path
 import re
-from contextlib import redirect_stdout
+from contextlib import redirect_stdout, redirect_stderr
 from io import StringIO
 from typing import List, Dict
 from itertools import combinations
@@ -30,7 +30,7 @@ class ChannelBot(commands.Bot):
             if log_channel is None:
                 continue
             print(f"Running hourly update in {guild.name}")
-            await archive_inactive_inner(guild, log_channel, verbose=False)
+            await archive_inactive_inner(guild, log_channel, verbose=True)
             await sort_inner(guild, log_channel, verbose=False)
 
 
@@ -256,6 +256,9 @@ async def make_channel(ctx, owner: discord.Member, name: str):
 async def archive(ctx):
     """Archive a channel."""
     await ctx.send("Archiving channel.")
+    get_log_channel(ctx.guild).send(
+        f"Channel {ctx.channel.mention} archived manually by owner."
+    )
     await ctx.channel.edit(category=get_archive_category(ctx.guild))
     everyone = discord.utils.get(ctx.guild.roles, name="@everyone")
     await ctx.channel.set_permissions(everyone, send_messages=False)
@@ -265,31 +268,6 @@ async def archive(ctx):
                 role, overwrite=CHANNEL_OWNER_PERMS
             )
             break
-
-
-@bot.command()
-@commands.has_permissions(administrator=True)
-async def inactive(ctx):
-    """Print inactive channels."""
-    await ctx.send(f"Looking for inactive project channels.")
-    inactive_channels = 0
-    channel: discord.TextChannel
-    for channel in chain.from_iterable(
-        c.channels for c in get_project_categories(ctx.guild)
-    ):
-        try:
-            last_message, *_ = await channel.history(limit=1).flatten()
-        except IndexError:
-            continue
-        time_since = datetime.now() - last_message.created_at
-        if time_since.days > 90:
-            await ctx.send(
-                f"{channel.mention} is inactive, last message "
-                f"{time_since.days} days ago."
-            )
-            inactive_channels += 1
-
-    await ctx.send(f"Found {inactive_channels} inactive channels.")
 
 
 @bot.command()
@@ -319,7 +297,9 @@ async def archive_inactive_inner(
         if time_since.days <= 90:
             continue
         if verbose:
-            await log_channel.send(f"Archiving {channel.mention}.")
+            await log_channel.send(
+                f"Archiving {channel.mention} due to inactivity."
+            )
         await channel.send(
             "Archiving channel due to inactivity. "
             "If you're the channel owner, send a message here to unarchive."
@@ -351,14 +331,19 @@ async def run_python(ctx, *, code):
             globals_,
             locals_,
         )
-        return await locals_["__ex"](ctx, globals_, locals_)
+        try:
+            return await locals_["__ex"](ctx, globals_, locals_)
+        except Exception as e:
+            await ctx.reply(f"⚠️ {e}")
+            raise e
 
     code = re.match("```(python)?(.*?)```", code, flags=re.DOTALL).group(2)
     print(f"Running ```{code}```")
     stdout = StringIO()
-    with redirect_stdout(stdout):
+    stderr = StringIO()
+    with redirect_stdout(stdout), redirect_stderr(stderr):
         await aexec(code, globals(), locals())
-    await ctx.send(f"```\n{stdout.getvalue()}\n```")
+    await ctx.send(f"```\n{stdout.getvalue()}\n\n{stderr.getvalue()}```")
 
 
 @bot.listen("on_message")
@@ -418,6 +403,9 @@ async def on_guild_channel_update(before, after):
     categories = get_project_categories(before.guild)
     if not (after.category in categories and after.name != before.name):
         return
+    get_log_channel(before.guild).send(
+        f"Channel {before.mention} was renamed: {before.name} -> {after.name}"
+    )
     await reposition_channel(after, categories)
 
 

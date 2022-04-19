@@ -269,7 +269,7 @@ async def make_channel(ctx, owner: discord.Member, name: str):
     await new_channel.edit(overwrites=overwrites)
     await ctx.send(f"Set appropriate permissions for {new_channel.mention}.")
     await sort_inner(ctx.guild, ctx.channel, verbose=True)
-    await ctx.send(f"Done!")
+    await ctx.send(f"✅ Done!")
 
 
 @bot.command()
@@ -366,6 +366,15 @@ async def run_python(ctx, *, code):
         await aexec(code, globals(), locals())
     await ctx.send(f"```\n{stdout.getvalue()}\n\n{stderr.getvalue()}```")
 
+
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def change_presence(ctx):
+    """Change the bot's presence."""
+    await bot.change_presence(
+        activity=discord.Game(name=get_random_top100_steam_game())
+    )
+    await ctx.send("✅ Done!")
 
 @bot.listen("on_message")
 async def on_message(message: discord.Message) -> None:

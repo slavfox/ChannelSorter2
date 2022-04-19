@@ -379,7 +379,7 @@ async def eval_python(ctx, *, expr):
 
     embed = discord.Embed(
         title=f"Python expression",
-        description=f"```python\n>>> {expr}\n{result}\n```",
+        description=f"```python\n>>> {expr}\n{result!r}\n```",
         colour=discord.Colour.green(),
     )
 

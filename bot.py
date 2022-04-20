@@ -16,7 +16,7 @@ from datetime import datetime
 from io import StringIO
 from itertools import chain, combinations
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Tuple
 from urllib.request import urlopen
 
 import discord
@@ -438,14 +438,41 @@ def get_random_top100_steam_game() -> str:
     return games[game]["name"]
 
 
-def system_temperature() -> float:
+def cpu_temp_and_voltage() -> Tuple[float, float]:
     """Get the current system temperature."""
     try:
-        return json.loads(
+        data = json.loads(
             subprocess.run(["sensors", "-j"], stdout=subprocess.PIPE).stdout
-        )["coretemp-isa-0000"]["Package id 0"]["temp1_input"]
-    except (KeyError, json.decoder.JSONDecodeError):
-        return 40.0
+        )
+    except json.decoder.JSONDecodeError:
+        return 40.0, 1.0
+    return (
+        data.get("coretemp-isa-0000", {})
+        .get("Package id 0", {})
+        .get("temp1_input", 40.0),
+        data.get("nct6795-isa-0a20", {})
+        .get("Vcore", {})
+        .get("in0_input", 1.0),
+    )
+
+
+def get_neofetch_field(field: str) -> str:
+    return (
+        subprocess.run(["neofetch", field], stdout=subprocess.PIPE)
+        .stdout.decode("utf-8")
+        .partition(": ")[-1]
+        .strip()
+    )
+
+
+def get_model() -> str:
+    """Get mobo model."""
+    with open("/sys/devices/virtual/dmi/id/board_vendor") as f:
+        vendor = f.read().strip()
+    with open("/sys/devices/virtual/dmi/id/board_name") as f:
+        board_name = f.read().strip()
+
+    return f"{vendor} {board_name}"
 
 
 def disk_usage_str() -> str:
@@ -465,8 +492,8 @@ def disk_usage_str() -> str:
         seen_devices.add(p.device)
 
     return (
-        f"`{(used / total) * 100:.2f}%` "
-        f"`({used / GiB:.2f}/{total / GiB:.2f} GiB`)"
+        f"`{used / GiB:.2f}/{total / GiB:.2f} GiB "
+        f"({(used / total) * 100:.2f}%)`"
     )
 
 
@@ -533,46 +560,57 @@ async def restart(ctx):
     os.execl(sys.executable, sys.executable, *sys.argv)
 
 
-@bot.command()
-@commands.has_permissions(administrator=True)
+@bot.command(aliases=["neofetch", "info"])
 async def status(ctx):
     """Display various system information."""
     start = time.perf_counter()
-    uptime = (
-        subprocess.run(["uptime", "-p"], stdout=subprocess.PIPE)
-        .stdout.decode("utf-8")
-        .strip()
-    )
+
     virtual_memory = psutil.virtual_memory()
     total_memory = virtual_memory.total / GiB
     used_memory = (virtual_memory.total - virtual_memory.available) / GiB
+    cpu_temp, voltage = cpu_temp_and_voltage()
+    project_channels = len(
+        list(
+            chain.from_iterable(
+                c.channels for c in get_project_categories(ctx.guild)
+            )
+        )
+    )
+
     embed = discord.Embed(
-        title=f"`channelsorter@{socket.gethostname()}`",
-        description=uptime,
+        title=f"`channelsorter@{socket.gethostname()}:~$`",
+        description=f"⌚ **Up for:** {get_neofetch_field('uptime')} ⌚\n\n"
+        f"**OS**: `{get_neofetch_field('distro')}`\n"
+        f"**Kernel**: `{get_neofetch_field('kernel')}`\n"
+        f"**Host**: `{get_model()}`\n"
+        f"**CPU**: `{get_neofetch_field('cpu')}`\n"
+        f"**GPU**: `{get_neofetch_field('gpu')}`\n"
+        f"**Memory**: `{used_memory:.2f}/{total_memory:.2f} GiB "
+        f"({virtual_memory.percent}%)`\n"
+        f"**Disk space**: {disk_usage_str()}\n\n"
+        f"🧑‍💻 Managing {project_channels} wonderful project channels!\n\n"
+        f"https://github.com/slavfox/ChannelSorter2\n\n",
         colour=discord.Colour.green(),
     )
-    embed.set_image(url=bot.user.avatar_url_as(size=128))
     embed.add_field(
-        name="Python version", value=f"`{sys.version}`", inline=False
+        name="🐍 Python version", value=f"`{sys.version}`", inline=False
     )
     embed.add_field(
-        name="Latency", value=f"`{bot.latency*1000:n} ms`", inline=False
+        name="⏳ Latency", value=f"`{bot.latency*1000:n} ms`", inline=False
     )
     embed.add_field(
-        name="CPU usage", value=f"`{psutil.cpu_percent():n}%`", inline=False
+        name="🧠 CPU usage", value=f"`{psutil.cpu_percent():n}%`", inline=False
     )
     embed.add_field(
-        name="CPU temperature",
-        value=f"`{system_temperature()}°C`",
+        name="🌡️ CPU temperature",
+        value=f"`{cpu_temp}°C`",
         inline=False,
     )
     embed.add_field(
-        name="Memory usage",
-        value=f"`{virtual_memory.percent}%` "
-        f"(`{used_memory:.2f}/{total_memory:.2f} GiB`)",
+        name="⚡ Vcore",
+        value=f"`{voltage}V`",
         inline=False,
     )
-    embed.add_field(name="Disk space", value=disk_usage_str(), inline=False)
     await ctx.send(
         f"Diagnostic finished in: `{(time.perf_counter() - start)*1000:n} ms`",
         embed=embed,

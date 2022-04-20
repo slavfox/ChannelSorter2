@@ -408,10 +408,12 @@ async def reposition_channel(channel, project_categories):
 
 
 @bot.event
-async def on_command_error(ctx, error):
+async def on_command_error(ctx, exception):
     """Handle command errors by sending the stringified exception back."""
-    traceback.print_exception(error)
-    await ctx.reply(str(error))
+    await ctx.reply(str(exception))
+    traceback.print_exception(
+        type(exception), exception, exception.__traceback__, file=sys.stderr
+    )
 
 
 @bot.event

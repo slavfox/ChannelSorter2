@@ -386,7 +386,7 @@ def normalized_username(member: discord.Member) -> str:
     """Normalize a member's username."""
     # Strip out RTL characters
     invalid_directionalities = ["R", "AL", "RLE", "RLO", "RLI"]
-    normalized = unicodedata.normalize("NFKD", member.display_name)
+    normalized = unicodedata.normalize("NFKC", member.display_name)
     return (
         "".join(
             ch

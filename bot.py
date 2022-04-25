@@ -11,6 +11,7 @@ import subprocess
 import sys
 import time
 import traceback
+import unicodedata
 from contextlib import redirect_stderr, redirect_stdout
 from datetime import datetime
 from io import StringIO
@@ -40,16 +41,20 @@ class ChannelBot(commands.Bot):
                 name="over the project channels",
             )
         )
-        for guild in self.guilds:
-            log_channel = get_log_channel(guild)
-            if log_channel is None:
-                continue
-            print(f"Running hourly update in {guild.name}")
-            await archive_inactive_inner(guild, log_channel, verbose=False)
-            await sort_inner(guild, log_channel, verbose=False)
-        await self.change_presence(
-            activity=discord.Game(name=get_random_top100_steam_game())
-        )
+        try:
+            for guild in self.guilds:
+                log_channel = get_log_channel(guild)
+                if log_channel is None:
+                    continue
+                print(f"Running hourly update in {guild.name}")
+                await archive_inactive_inner(guild, log_channel, verbose=False)
+                await sort_inner(guild, log_channel, verbose=False)
+                for member in guild.members:
+                    await maybe_normalize_nickname(member)
+        finally:
+            await self.change_presence(
+                activity=discord.Game(name=get_random_top100_steam_game())
+            )
 
     async def on_ready(self):
         """Set initial presence."""
@@ -375,6 +380,46 @@ async def on_message(message: discord.Message) -> None:
         f"Channel {message.channel.mention} unarchived."
     )
     await message.channel.send("Channel unarchived!")
+
+
+def normalized_username(member: discord.Member) -> str:
+    """Normalize a member's username."""
+    # Strip out RTL characters
+    invalid_directionalities = ["R", "AL", "RLE", "RLO", "RLI"]
+    normalized = unicodedata.normalize("NFKC", member.display_name)
+    return (
+        "".join(
+            ch
+            for ch in normalized
+            if unicodedata.combining(ch) == 0
+            and unicodedata.bidirectional(ch) not in invalid_directionalities
+        ).strip()
+        or f"User{member.id}"
+    )
+
+
+async def maybe_normalize_nickname(member: discord.Member) -> str:
+    """Maybe normalize a member's nickname."""
+    normalized = normalized_username(member)
+    if normalized != member.display_name:
+        await get_log_channel(member.guild).send(
+            f"Renaming {member.mention}: {member.display_name} -> {normalized}"
+        )
+        await member.edit(nick=normalized_username(member))
+
+
+@bot.event
+async def on_member_join(member: discord.Member) -> None:
+    """Normalize usernames for new members."""
+    await maybe_normalize_nickname(member)
+
+
+@bot.event
+async def on_member_update(
+    before: discord.Member, after: discord.Member
+) -> None:
+    """Normalize usernames on update."""
+    await maybe_normalize_nickname(after)
 
 
 async def reposition_channel(channel, project_categories):

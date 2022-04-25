@@ -386,7 +386,7 @@ def normalized_username(member: discord.Member) -> str:
     """Normalize a member's username."""
     # Strip out RTL characters
     invalid_directionalities = ["R", "AL", "RLE", "RLO", "RLI"]
-    normalized = unicodedata.normalize("NFKC", member.display_name)
+    normalized = unicodedata.normalize("NFKD", member.display_name)
     return (
         "".join(
             ch
@@ -394,7 +394,7 @@ def normalized_username(member: discord.Member) -> str:
             if unicodedata.combining(ch) == 0
             and unicodedata.bidirectional(ch) not in invalid_directionalities
         ).strip()
-        or f"User{member.id}"
+        or f"User{member.discriminator}"
     )
 
 

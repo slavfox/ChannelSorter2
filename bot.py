@@ -335,7 +335,7 @@ async def disable_langbot(ctx):
     ):
         await ctx.send("✅ Langbot is already disabled in this channel.")
         return
-    await ctx.channel.set_permissions(langbot, None)
+    await ctx.channel.set_permissions(langbot, overwrite=None)
     await ctx.send("✅ Langbot disabled.")
 
 

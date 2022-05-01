@@ -98,6 +98,14 @@ def get_log_channel(guild: discord.Guild) -> discord.TextChannel:
     return discord.utils.get(guild.channels, name="channelbot-logs")
 
 
+def get_langbot(guild: discord.Guild) -> discord.Member:
+    """Get a reference to LangBot."""
+    langbot = discord.utils.get(guild.members, id=969984431693627533)
+    if langbot is None:
+        raise discord.ext.commands.MemberNotFound("LangBot")
+    return langbot
+
+
 def unbalancedness(separator_idxs: List[int]) -> int:
     """
     Return the sum of squares of differences between sublist lengths given a
@@ -301,6 +309,34 @@ async def archive(ctx):
                 role, overwrite=CHANNEL_OWNER_PERMS
             )
             break
+
+
+@bot.command()
+@commands.has_permissions(manage_channels=True)
+async def enable_langbot(ctx):
+    """Enable Langbot to view this channel."""
+    langbot = get_langbot(ctx.guild)
+    if langbot in ctx.channel.overwrites:
+        if ctx.channel.overwrites[langbot].view_channel:
+            await ctx.send("✅ Langbot is already enabled in this channel.")
+            return
+    await ctx.channel.set_permissions(langbot, view_channel=True)
+    await ctx.send("✅ Langbot enabled.")
+
+
+@bot.command()
+@commands.has_permissions(manage_channels=True)
+async def disable_langbot(ctx):
+    """Prevent Langbot from viewing this channel."""
+    langbot = get_langbot(ctx.guild)
+    if (
+        langbot not in ctx.channel.overwrites
+        or not ctx.channel.overwrites[langbot].view_channel
+    ):
+        await ctx.send("✅ Langbot is already disabled in this channel.")
+        return
+    await ctx.channel.set_permissions(langbot, None)
+    await ctx.send("✅ Langbot disabled.")
 
 
 @bot.command()

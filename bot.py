@@ -248,7 +248,11 @@ async def sort_inner(
                 moves_made += 1
                 channel.category_id = category.id
                 channel.position = new_pos
-                print(f"Moving channel {channel.name}.")
+                print(
+                    f"Moving channel {channel.name}.\n"
+                    f"New channel.position: {new_pos}\n"
+                    f"New position: {category.channels[i].position}.\n"
+                )
                 await channel.edit(
                     category=category, position=category.channels[i].position
                 )
@@ -290,6 +294,24 @@ async def make_channel(ctx, owner: discord.Member, name: str):
     await ctx.send(f"Set appropriate permissions for {new_channel.mention}.")
     await sort_inner(ctx.guild, ctx.channel, verbose=True)
     await ctx.send(f"✅ Done!")
+
+
+@bot.command()
+@commands.has_permissions(manage_roles=True)
+async def rename_role(ctx, role: discord.Role, *, name: str):
+    """Rename a role."""
+    prev_name = role.name
+    await role.edit(name=name)
+    await ctx.send(f"Renamed role {prev_name} -> {role.mention}.")
+
+
+@bot.command()
+@commands.has_permissions(manage_channels=True)
+async def rename_channel(ctx, *, name: str):
+    """Rename a channel."""
+    prev_name = ctx.channel.name
+    await ctx.channel.edit(name=name)
+    await ctx.send(f"Renamed channel {prev_name} -> {ctx.channel.mention}.")
 
 
 @bot.command()

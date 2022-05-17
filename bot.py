@@ -48,7 +48,7 @@ class ChannelBot(commands.Bot):
                     continue
                 print(f"Running hourly update in {guild.name}")
                 await archive_inactive_inner(guild, log_channel, verbose=False)
-                await sort_inner(guild, log_channel, verbose=False)
+                await sort_inner(guild, log_channel, verbose=True)
                 for member in guild.members:
                     await maybe_normalize_nickname(member)
         finally:
@@ -191,9 +191,6 @@ async def sort_inner(
     verbose: bool = True,
 ):
     """Channel sorting logic."""
-    if verbose:
-        await log_channel.send("Sorting channels!")
-
     moves_made = 0
     renames_made = 0
 
@@ -210,10 +207,6 @@ async def sort_inner(
         end_letter = cat_channels[-1].name.upper()[0]
         # Rename category if necessary
         new_cat_name = f"Projects {start_letter}-{end_letter}"
-        print(
-            f"{new_cat_name}: "
-            f"channels {cat_channels[0].name}:{cat_channels[-1].name}"
-        )
         if category.name != new_cat_name:
             renames_made += 1
             if verbose:
@@ -248,16 +241,17 @@ async def sort_inner(
                 moves_made += 1
                 channel.category_id = category.id
                 channel.position = new_pos
-                print(
-                    f"Moving channel {channel.name}.\n"
-                    f"New channel.position: {new_pos}\n"
-                    f"New position: {category.channels[i].position}.\n"
-                )
+                if verbose:
+                    await log_channel.send(
+                        f"Moving channel {channel.name}.\n"
+                        f"New channel.position: {new_pos}\n"
+                        f"New position: {category.channels[i].position}.\n"
+                    )
                 await channel.edit(
                     category=category, position=category.channels[i].position
                 )
 
-    if verbose or renames_made > 0 or moves_made > 0:
+    if renames_made > 0 or moves_made > 0:
         await log_channel.send(
             f"Channels sorted! Renamed {renames_made} categories and "
             f"moved {moves_made} channels."

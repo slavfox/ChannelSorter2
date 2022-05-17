@@ -240,10 +240,12 @@ async def sort_inner(
                             other_channel.position -= 1
                 moves_made += 1
                 channel.category_id = category.id
+                _old_pos_for_logs = channel.position
                 channel.position = new_pos
                 if verbose:
                     await log_channel.send(
                         f"Moving channel {channel.name}.\n"
+                        f"Old position: {_old_pos_for_logs}\n"
                         f"New channel.position: {new_pos}\n"
                         f"New position: {category.channels[i].position}.\n"
                     )

@@ -182,7 +182,9 @@ async def set_categories(ctx, *categories: discord.CategoryChannel):
 @commands.has_permissions(administrator=True)
 async def sort(ctx: discord.ext.commands.Context):
     """Sort project channels."""
-    return await sort_inner(ctx.guild, ctx.channel)
+    await ctx.send("Sorting project channels...")
+    await sort_inner(ctx.guild, ctx.channel)
+    await ctx.send("Done!")
 
 
 async def sort_inner(

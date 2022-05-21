@@ -624,7 +624,15 @@ async def run_python(ctx, *, code):
     stderr = StringIO()
     with redirect_stdout(stdout), redirect_stderr(stderr):
         await aexec(code, globals(), locals())
-    await ctx.send(f"```\n{stdout.getvalue()}\n\n{stderr.getvalue()}```")
+    output = ""
+    stdout_val = stdout.getvalue()
+    if stdout_val:
+        output = f"Stdout:\n```\n{stdout_val}\n```\n"
+    stderr_val = stderr.getvalue()
+    if stderr_val:
+        output += f"Stderr:\n```\n{stderr_val}\n```\n"
+    if output:
+        await ctx.send(output)
 
 
 @bot.command(name="eval")

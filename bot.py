@@ -631,8 +631,9 @@ async def run_python(ctx, *, code):
     stderr_val = stderr.getvalue()
     if stderr_val:
         output += f"Stderr:\n```\n{stderr_val}\n```\n"
-    if output:
-        await ctx.send(output)
+    if not output:
+        output = "Done!"
+    await ctx.send(output)
 
 
 @bot.command(name="eval")

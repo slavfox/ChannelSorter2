@@ -13,7 +13,7 @@ import time
 import traceback
 import unicodedata
 from contextlib import redirect_stderr, redirect_stdout
-from datetime import datetime
+from datetime import datetime, timedelta
 from io import StringIO
 from itertools import chain, combinations
 from pathlib import Path
@@ -379,13 +379,16 @@ async def archive_inactive_inner(
     for channel in chain.from_iterable(
         c.channels for c in get_project_categories(guild)
     ):
-        try:
-            last_message, *_ = await channel.history(limit=1).flatten()
-        except IndexError:
+        async for message in channel.history(
+            limit=None,
+            after=datetime.now() - timedelta(days=90),
+            oldest_first=True,
+        ):
+            if not message.author.bot:
+                break
+        else:
             continue
-        time_since = datetime.now() - last_message.created_at
-        if time_since.days <= 90:
-            continue
+
         await log_channel.send(
             f"Archiving {channel.mention} due to inactivity."
         )
@@ -422,9 +425,10 @@ async def change_presence(ctx):
 async def on_message(message: discord.Message) -> None:
     """Listen for messages in archived channels to unarchive them."""
     if (
-        not isinstance(message.guild, discord.Guild)
+        (not isinstance(message.guild, discord.Guild))
         or message.channel.category is None
         or message.channel.category != get_archive_category(message.guild)
+        or message.author.bot
     ):
         return
     everyone = discord.utils.get(message.guild.roles, name="@everyone")

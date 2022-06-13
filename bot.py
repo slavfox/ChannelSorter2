@@ -366,6 +366,10 @@ async def archive_inactive(ctx):
     return await archive_inactive_inner(ctx.guild, ctx.channel)
 
 
+class MessageFound(Exception):
+    pass
+
+
 async def archive_inactive_inner(
     guild: discord.Guild,
     log_channel: discord.TextChannel,
@@ -379,14 +383,15 @@ async def archive_inactive_inner(
     for channel in chain.from_iterable(
         c.channels for c in get_project_categories(guild)
     ):
-        async for message in channel.history(
-            limit=None,
-            after=datetime.now() - timedelta(days=90),
-            oldest_first=True,
-        ):
-            if not message.author.bot:
-                break
-        else:
+        try:
+            async for message in channel.history(
+                limit=None,
+                after=datetime.now() - timedelta(days=90),
+                oldest_first=True,
+            ):
+                if not message.author.bot:
+                    raise MessageFound("Found a non-bot message!")
+        except MessageFound:
             continue
 
         await log_channel.send(

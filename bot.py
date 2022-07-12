@@ -391,7 +391,7 @@ async def notify(ctx):
     notifies = get_notifies()
     channel_id = str(ctx.channel.id)
     if channel_id not in notifies:
-        notifies[ctx.channel.id] = []
+        notifies[channel_id] = []
 
     if ctx.author.id in notifies[channel_id]:
         notifies[channel_id].remove(ctx.author.id)

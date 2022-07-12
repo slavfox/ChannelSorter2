@@ -17,6 +17,7 @@ from datetime import datetime, timedelta
 from io import StringIO
 from itertools import chain, combinations
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 from typing import Dict, List, Tuple
 from urllib.request import urlopen
 
@@ -25,8 +26,25 @@ import psutil as psutil
 from discord.ext import commands, tasks
 
 channels_path = Path(__file__).parent / "categories.txt"
+notifs_path = Path(__file__).parent / "notify.json"
 
 GiB = 1024**3
+
+
+def get_notifies() -> Dict[int, List[int]]:
+    """Get a dict mapping guild ID to a list of channel IDs to notify."""
+    try:
+        with notifs_path.open() as f:
+            return json.load(f)
+    except (FileNotFoundError, json.decoder.JSONDecodeError):
+        return {}
+
+
+def save_notifies(notifies: Dict[int, List[int]]):
+    """Save a dict mapping guild ID to a list of channel IDs to notify."""
+    with NamedTemporaryFile(mode="w", delete=False) as f:
+        json.dump(notifies, f)
+    os.replace(f.name, notifs_path)
 
 
 class ChannelBot(commands.Bot):
@@ -366,6 +384,28 @@ async def archive_inactive(ctx):
     return await archive_inactive_inner(ctx.guild, ctx.channel)
 
 
+@bot.command()
+async def notify(ctx):
+    """Toggle pinging user for every message in this channel."""
+    notifies = get_notifies()
+    if ctx.channel.id not in notifies:
+        notifies[ctx.channel.id] = {}
+
+    if ctx.author.id in notifies[ctx.channel.id]:
+        notifies[ctx.channel.id].remove(ctx.author.id)
+        await ctx.send(
+            "✅ You will no longer be pinged about messages in this channel."
+        )
+    else:
+        notifies[ctx.channel.id].append(ctx.author.id)
+        await ctx.send(
+            "✅ You will now be pinged about messages in this channel."
+        )
+
+    save_notifies(notifies)
+    return
+
+
 class MessageFound(Exception):
     pass
 
@@ -429,22 +469,38 @@ async def change_presence(ctx):
 @bot.listen("on_message")
 async def on_message(message: discord.Message) -> None:
     """Listen for messages in archived channels to unarchive them."""
-    if (
-        (not isinstance(message.guild, discord.Guild))
-        or message.channel.category is None
-        or message.channel.category != get_archive_category(message.guild)
-        or message.author.bot
-    ):
+    if (not isinstance(message.guild, discord.Guild)) or message.author.bot:
         return
-    everyone = discord.utils.get(message.guild.roles, name="@everyone")
-    await message.channel.set_permissions(everyone, overwrite=None)
-    await reposition_channel(
-        message.channel, get_project_categories(message.guild)
+
+    if message.channel.category == get_archive_category(message.guild):
+        everyone = discord.utils.get(message.guild.roles, name="@everyone")
+        await message.channel.set_permissions(everyone, overwrite=None)
+        await reposition_channel(
+            message.channel, get_project_categories(message.guild)
+        )
+        await get_log_channel(message.guild).send(
+            f"Channel {message.channel.mention} unarchived."
+        )
+        await message.channel.send("Channel unarchived!")
+
+    # Notify
+    users_to_notify = get_notifies().get(message.channel.id, [])
+    embed = discord.Embed()
+    embed.set_author(
+        name=message.author.name, icon_url=message.author.avatar_url
     )
-    await get_log_channel(message.guild).send(
-        f"Channel {message.channel.mention} unarchived."
+    embed.description = message.content
+    embed.set_footer(
+        text=f"[#{message.channel.name}]({message.jump_url}) - "
+        f"send ./notify in the channel to stop receiving notifications."
     )
-    await message.channel.send("Channel unarchived!")
+
+    for uid in users_to_notify:
+        if uid == message.author.id:
+            continue
+        bot.get_user(uid).send(
+            embed=embed,
+        )
 
 
 def normalized_username(member: discord.Member) -> str:

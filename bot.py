@@ -389,7 +389,7 @@ async def notify(ctx):
     """Toggle pinging user for every message in this channel."""
     notifies = get_notifies()
     if ctx.channel.id not in notifies:
-        notifies[ctx.channel.id] = {}
+        notifies[ctx.channel.id] = []
 
     if ctx.author.id in notifies[ctx.channel.id]:
         notifies[ctx.channel.id].remove(ctx.author.id)

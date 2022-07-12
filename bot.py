@@ -500,7 +500,7 @@ async def on_message(message: discord.Message) -> None:
             continue
         await bot.get_user(uid).send(
             f"{message.author.mention} sent a message in "
-            f"{message.channel.mention} ({message.jump_url})",
+            f"{message.channel.mention}:",
             embed=embed,
         )
 

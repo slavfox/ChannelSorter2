@@ -32,7 +32,7 @@ notifs_path = Path(__file__).parent / "notify.json"
 GiB = 1024**3
 
 
-def get_notifies() -> Dict[int, List[int]]:
+def get_notifies() -> Dict[str, List[int]]:
     """Get a dict mapping guild ID to a list of channel IDs to notify."""
     try:
         with notifs_path.open() as f:
@@ -41,7 +41,7 @@ def get_notifies() -> Dict[int, List[int]]:
         return {}
 
 
-def save_notifies(notifies: Dict[int, List[int]]):
+def save_notifies(notifies: Dict[str, List[int]]):
     """Save a dict mapping guild ID to a list of channel IDs to notify."""
     with NamedTemporaryFile(mode="w", delete=False) as f:
         json.dump(notifies, f)
@@ -389,16 +389,17 @@ async def archive_inactive(ctx):
 async def notify(ctx):
     """Toggle pinging user for every message in this channel."""
     notifies = get_notifies()
-    if ctx.channel.id not in notifies:
+    channel_id = str(ctx.channel.id)
+    if channel_id not in notifies:
         notifies[ctx.channel.id] = []
 
-    if ctx.author.id in notifies[ctx.channel.id]:
-        notifies[ctx.channel.id].remove(ctx.author.id)
+    if ctx.author.id in notifies[channel_id]:
+        notifies[channel_id].remove(ctx.author.id)
         await ctx.send(
             "✅ You will no longer be pinged about messages in this channel."
         )
     else:
-        notifies[ctx.channel.id].append(ctx.author.id)
+        notifies[channel_id].append(ctx.author.id)
         await ctx.send(
             "✅ You will now be pinged about messages in this channel."
         )
@@ -485,21 +486,21 @@ async def on_message(message: discord.Message) -> None:
         await message.channel.send("Channel unarchived!")
 
     # Notify
-    users_to_notify = get_notifies().get(message.channel.id, [])
+    users_to_notify = get_notifies().get(str(message.channel.id), [])
     embed = discord.Embed()
     embed.set_author(
         name=message.author.name, icon_url=message.author.avatar_url
     )
     embed.description = message.content
-    embed.set_footer(
-        text=f"[#{message.channel.name}]({message.jump_url}) - "
-        f"send ./notify in the channel to stop receiving notifications."
-    )
+    embed.url = message.jump_url
+    embed.set_footer(text=f"#{message.channel.name}")
 
     for uid in users_to_notify:
         if uid == message.author.id:
             continue
-        bot.get_user(uid).send(
+        await bot.get_user(uid).send(
+            f"{message.author.mention} sent a message in "
+            f"{message.channel.mention} ({message.jump_url})",
             embed=embed,
         )
 

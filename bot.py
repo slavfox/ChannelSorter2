@@ -4,6 +4,7 @@
 """/r/ProgrammingLanguages discord channel management bot."""
 import json
 import os
+import shutil
 import random
 import re
 import socket
@@ -44,7 +45,7 @@ def save_notifies(notifies: Dict[int, List[int]]):
     """Save a dict mapping guild ID to a list of channel IDs to notify."""
     with NamedTemporaryFile(mode="w", delete=False) as f:
         json.dump(notifies, f)
-    os.replace(f.name, notifs_path)
+    shutil.move(f.name, notifs_path)
 
 
 class ChannelBot(commands.Bot):

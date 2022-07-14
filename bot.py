@@ -190,7 +190,9 @@ def write_message(message: discord.Message, buffer: StringIO):
             buffer.write(f"{a.url}\n")
 
 
-def dump_channel_contents(channel: discord.TextChannel, buffer: StringIO):
+async def dump_channel_contents(
+    channel: discord.TextChannel, buffer: StringIO
+):
     buffer.write(f"Channel: #{channel.name}\n" f"Topic: {channel.topic}\n")
     message: discord.Message
     pins = await channel.pins()
@@ -418,7 +420,7 @@ async def export(ctx: discord.ext.commands.Context):
     """Upload a file with the full history of the channel."""
     await ctx.send("Exporting channel history. This may take a while...")
     io = StringIO()
-    dump_channel_contents(ctx.channel, io)
+    await dump_channel_contents(ctx.channel, io)
     await ctx.send(
         "✅ Done!",
         file=discord.File(io, filename=f"history_{ctx.channel.name}.txt"),

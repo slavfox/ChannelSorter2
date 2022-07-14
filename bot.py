@@ -21,6 +21,7 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Dict, List, Tuple
 from urllib.request import urlopen
+from io import StringIO
 
 import discord
 import psutil as psutil
@@ -175,6 +176,39 @@ def balanced_categories(
 
     assert all(category.id in category_channels for category in categories)
     return category_channels
+
+
+def write_message(message: discord.Message, buffer: StringIO):
+    buffer.write(
+        f"[{message.created_at}] "
+        f"{message.author}: "
+        f"{message.clean_content}\n"
+    )
+    if message.attachments:
+        buffer.write(f"[attachments]:\n")
+        for a in message.attachments:
+            buffer.write(f"{a.url}\n")
+
+
+def dump_channel_contents(channel: discord.TextChannel, buffer: StringIO):
+    buffer.write(f"Channel: #{channel.name}\n" f"Topic: {channel.topic}\n")
+    message: discord.Message
+    pins = await channel.pins()
+    if pins:
+        buffer.write("\nPins:\n\n")
+
+    for message in pins:
+        buffer.write(f"[PINNED]")
+        write_message(message, buffer)
+
+    buffer.write("\nChannel history:\n\n")
+
+    async for message in channel.history(
+        limit=None,
+        after=datetime.now() - timedelta(days=90),
+        oldest_first=True,
+    ):
+        write_message(message, buffer)
 
 
 @bot.command()
@@ -376,6 +410,19 @@ async def disable_langbot(ctx):
         return
     await ctx.channel.set_permissions(langbot, overwrite=None)
     await ctx.send("✅ Langbot disabled.")
+
+
+@bot.command()
+@commands.has_permissions(manage_channels=True)
+async def export(ctx: discord.ext.commands.Context):
+    """Upload a file with the full history of the channel."""
+    await ctx.send("Exporting channel history. This may take a while...")
+    io = StringIO()
+    dump_channel_contents(ctx.channel, io)
+    await ctx.send(
+        "✅ Done!",
+        file=discord.File(io, filename=f"history_{ctx.channel.name}.txt"),
+    )
 
 
 @bot.command()

@@ -4,9 +4,9 @@
 """/r/ProgrammingLanguages discord channel management bot."""
 import json
 import os
-import shutil
 import random
 import re
+import shutil
 import socket
 import subprocess
 import sys
@@ -21,7 +21,6 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Dict, List, Tuple
 from urllib.request import urlopen
-from io import StringIO
 
 import discord
 import psutil as psutil
@@ -68,6 +67,7 @@ class ChannelBot(commands.Bot):
                     continue
                 print(f"Running hourly update in {guild.name}")
                 await archive_inactive_inner(guild, log_channel, verbose=False)
+                await delete_dead_channels(guild, log_channel, verbose=False)
                 await sort_inner(guild, log_channel, verbose=True)
                 for member in guild.members:
                     await maybe_normalize_nickname(member)
@@ -180,7 +180,7 @@ def balanced_categories(
 
 def write_message(message: discord.Message, buffer: StringIO):
     buffer.write(
-        f"[{message.created_at}] "
+        f"[{message.created_at.isoformat(sep=' ', timespec='seconds')}] "
         f"{message.author}: "
         f"{message.clean_content}\n"
     )
@@ -207,7 +207,6 @@ async def dump_channel_contents(
 
     async for message in channel.history(
         limit=None,
-        after=datetime.now() - timedelta(days=90),
         oldest_first=True,
     ):
         write_message(message, buffer)
@@ -421,9 +420,10 @@ async def export(ctx: discord.ext.commands.Context):
     await ctx.send("Exporting channel history. This may take a while...")
     io = StringIO()
     await dump_channel_contents(ctx.channel, io)
+    io.seek(0)
     await ctx.send(
         "✅ Done!",
-        file=discord.File(io, filename=f"history_{ctx.channel.name}.txt"),
+        file=discord.File(io, filename=f"history.txt"),
     )
 
 
@@ -505,6 +505,61 @@ async def archive_inactive_inner(
 
     if verbose or archived > 0:
         await log_channel.send(f"Archived {archived} inactive channels.")
+
+
+async def delete_dead_channels(
+    guild: discord.Guild,
+    log_channel: discord.TextChannel,
+    verbose: bool = True,
+):
+    """Archive project channels that have been inactive for over 90 days."""
+    archive_channel = discord.utils.get(guild.channels, name="archive")
+    if verbose:
+        await log_channel.send("Deleting dead project channels.")
+    archived = 0
+    channel: discord.TextChannel
+    lang_owner_role = discord.utils.get(guild.roles, name="Lang Channel Owner")
+    for channel in get_archive_category(guild).channels:
+        try:
+            async for message in channel.history(
+                limit=None,
+                after=datetime.now() - timedelta(days=30 * 6),
+                oldest_first=True,
+            ):
+                if not message.author.bot:
+                    raise MessageFound("Found a non-bot message!")
+        except MessageFound:
+            continue
+
+        await archive_channel.send(
+            f"{channel.name} has had no activity in over three months. "
+            f"Deleting..."
+        )
+        pings = []
+        for role in channel.overwrites:
+            if role.name.startswith("lang: "):
+                for user in guild.members:
+                    if role in user.roles:
+                        await user.remove_roles(
+                            role,
+                            lang_owner_role,
+                            reason="Deleting dead channel",
+                        )
+                        pings.append(user)
+                break
+        io = StringIO()
+        await dump_channel_contents(channel, io)
+        io.seek(0)
+        await archive_channel.send(
+            f"Log for {channel.name} "
+            f"({', '.join(user.mention for user in pings)}):",
+            file=discord.File(io, filename=f"history_{channel.name}.txt"),
+        )
+        await channel.delete(reason="Deleting dead channel.")
+        archived += 1
+
+    if verbose or archived > 0:
+        await log_channel.send(f"Deleted {archived} dead channels.")
 
 
 @bot.command()

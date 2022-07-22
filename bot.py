@@ -262,8 +262,6 @@ async def sort_inner(
     )
     category_channels = balanced_categories(categories, channels)
     archive_category = get_archive_category(guild)
-    category_channels[archive_category.id] = sorted(
-        archive_category.channels, key=lambda ch: ch.name)
     # rename project categories
     for cat_id, cat_channels in category_channels.items():
         category = discord.utils.get(guild.categories, id=cat_id)
@@ -279,6 +277,8 @@ async def sort_inner(
                 )
             await category.edit(name=new_cat_name)
 
+    category_channels[archive_category.id] = sorted(
+        archive_category.channels, key=lambda ch: ch.name)
     categories.append(archive_category)
     # Shuffle channels around
     for category in categories:

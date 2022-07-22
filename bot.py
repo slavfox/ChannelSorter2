@@ -66,15 +66,20 @@ class ChannelBot(commands.Bot):
                 if log_channel is None:
                     continue
                 print(f"Running hourly update in {guild.name}")
+                print(f"Archiving inactive channels")
                 await archive_inactive_inner(guild, log_channel, verbose=False)
+                print(f"Deleting dead channels")
                 await delete_dead_channels(guild, log_channel, verbose=False)
+                print(f"Sorting channels")
                 await sort_inner(guild, log_channel, verbose=True)
+                print(f"Normalizing usernames")
                 for member in guild.members:
                     await maybe_normalize_nickname(member)
         finally:
             await self.change_presence(
                 activity=discord.Game(name=get_random_top100_steam_game())
             )
+            print(f"Done!")
 
     async def on_ready(self):
         """Set initial presence."""
@@ -256,6 +261,9 @@ async def sort_inner(
         key=lambda ch: ch.name,
     )
     category_channels = balanced_categories(categories, channels)
+    archive_category = get_archive_category(guild)
+    category_channels[archive_category.id] = sorted(
+        archive_category.channels, key=lambda ch: ch.name)
     # rename project categories
     for cat_id, cat_channels in category_channels.items():
         category = discord.utils.get(guild.categories, id=cat_id)
@@ -271,6 +279,7 @@ async def sort_inner(
                 )
             await category.edit(name=new_cat_name)
 
+    categories.append(archive_category)
     # Shuffle channels around
     for category in categories:
         for i, channel in enumerate(category_channels[category.id]):

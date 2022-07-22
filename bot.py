@@ -278,7 +278,8 @@ async def sort_inner(
             await category.edit(name=new_cat_name)
 
     category_channels[archive_category.id] = sorted(
-        archive_category.channels, key=lambda ch: ch.name)
+        archive_category.channels, key=lambda ch: ch.name
+    )
     categories.append(archive_category)
     # Shuffle channels around
     for category in categories:
@@ -437,6 +438,44 @@ async def export(ctx: discord.ext.commands.Context):
 
 
 @bot.command()
+@commands.has_permissions(manage_channels=True)
+async def delete_channel(ctx: discord.ext.commands.Context):
+    """Delete the channel"""
+    await ctx.send("Exporting channel history. This may take a while...")
+    await delete_channel_inner(ctx.channel, ctx.guild)
+
+
+async def delete_channel_inner(
+    channel: discord.TextChannel, guild: discord.Guild
+):
+    """Handle deleting a channel."""
+    pings = []
+    archive_channel = discord.utils.get(guild.channels, name="archive")
+    lang_owner_role = discord.utils.get(guild.roles, name="Lang Channel Owner")
+
+    for role in channel.overwrites:
+        if role.name.startswith("lang: "):
+            for user in guild.members:
+                if role in user.roles:
+                    await user.remove_roles(
+                        role,
+                        lang_owner_role,
+                        reason="Deleting dead channel",
+                    )
+                    pings.append(user)
+            break
+    io = StringIO()
+    await dump_channel_contents(channel, io)
+    io.seek(0)
+    await archive_channel.send(
+        f"Log for {channel.name} "
+        f"({', '.join(user.mention for user in pings)}):",
+        file=discord.File(io, filename=f"history_{channel.name}.txt"),
+    )
+    await channel.delete(reason="Deleting dead channel.")
+
+
+@bot.command()
 @commands.has_permissions(administrator=True)
 async def archive_inactive(ctx):
     """Archive inactive channels."""
@@ -527,7 +566,6 @@ async def delete_dead_channels(
         await log_channel.send("Deleting dead project channels.")
     archived = 0
     channel: discord.TextChannel
-    lang_owner_role = discord.utils.get(guild.roles, name="Lang Channel Owner")
     for channel in get_archive_category(guild).channels:
         try:
             async for message in channel.history(
@@ -544,27 +582,7 @@ async def delete_dead_channels(
             f"{channel.name} has had no activity in over three months. "
             f"Deleting..."
         )
-        pings = []
-        for role in channel.overwrites:
-            if role.name.startswith("lang: "):
-                for user in guild.members:
-                    if role in user.roles:
-                        await user.remove_roles(
-                            role,
-                            lang_owner_role,
-                            reason="Deleting dead channel",
-                        )
-                        pings.append(user)
-                break
-        io = StringIO()
-        await dump_channel_contents(channel, io)
-        io.seek(0)
-        await archive_channel.send(
-            f"Log for {channel.name} "
-            f"({', '.join(user.mention for user in pings)}):",
-            file=discord.File(io, filename=f"history_{channel.name}.txt"),
-        )
-        await channel.delete(reason="Deleting dead channel.")
+        await delete_channel_inner(channel, guild)
         archived += 1
 
     if verbose or archived > 0:

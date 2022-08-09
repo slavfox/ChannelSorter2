@@ -2,6 +2,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """/r/ProgrammingLanguages discord channel management bot."""
+import asyncio
 import json
 import os
 import random
@@ -440,7 +441,25 @@ async def export(ctx: discord.ext.commands.Context):
 @bot.command()
 @commands.has_permissions(manage_channels=True)
 async def delete_channel(ctx: discord.ext.commands.Context):
-    """Delete the channel"""
+    """Delete the channel and export its history."""
+    await ctx.send(
+        "Are you sure you want to delete this channel forever? "
+        "React with 👍 within 30 seconds to confirm."
+    )
+
+    def check(reaction, user):
+        return (
+            user == ctx.author
+            and reaction.message.id == ctx.message.id
+            and reaction.emoji == "👍"
+        )
+
+    try:
+        await bot.wait_for("reaction_add", timeout=30.0, check=check)
+    except asyncio.TimeoutError:
+        await ctx.send("Timed out. Cancelling.")
+        return
+
     await ctx.send("Exporting channel history. This may take a while...")
     await delete_channel_inner(ctx.channel, ctx.guild)
 

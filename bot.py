@@ -451,7 +451,7 @@ async def delete_channel(ctx: discord.ext.commands.Context):
         return (
             user == ctx.author
             and reaction.message.id == ctx.message.id
-            and reaction.emoji == "👍"
+            and str(reaction.emoji) == "👍"
         )
 
     try:

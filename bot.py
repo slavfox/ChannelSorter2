@@ -442,7 +442,7 @@ async def export(ctx: discord.ext.commands.Context):
 @commands.has_permissions(manage_channels=True)
 async def delete_channel(ctx: discord.ext.commands.Context):
     """Delete the channel and export its history."""
-    await ctx.send(
+    confirm_msg = await ctx.send(
         "Are you sure you want to delete this channel forever? "
         "React with 👍 within 30 seconds to confirm."
     )
@@ -450,7 +450,7 @@ async def delete_channel(ctx: discord.ext.commands.Context):
     def check(reaction, user):
         return (
             user == ctx.author
-            and reaction.message.id == ctx.message.id
+            and reaction.message.id == confirm_msg.id
             and str(reaction.emoji) == "👍"
         )
 

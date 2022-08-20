@@ -542,13 +542,20 @@ async def archive_inactive_inner(
         c.channels for c in get_project_categories(guild)
     ):
         try:
+            has_messages = False
             async for message in channel.history(
                 limit=None,
                 after=datetime.now() - timedelta(days=90),
                 oldest_first=True,
             ):
+                has_messages = True
                 if not message.author.bot:
                     raise MessageFound("Found a non-bot message!")
+            if not has_messages:
+                # Skip new channels
+                if channel.created_at > datetime.now() - timedelta(days=30):
+                    continue
+
         except MessageFound:
             continue
 
@@ -587,13 +594,19 @@ async def delete_dead_channels(
     channel: discord.TextChannel
     for channel in get_archive_category(guild).channels:
         try:
+            has_messages = False
             async for message in channel.history(
                 limit=None,
                 after=datetime.now() - timedelta(days=30 * 6),
                 oldest_first=True,
             ):
+                has_messages = True
                 if not message.author.bot:
                     raise MessageFound("Found a non-bot message!")
+            if not has_messages:
+                # Skip new channels
+                if channel.created_at > datetime.now() - timedelta(days=30):
+                    continue
         except MessageFound:
             continue
 

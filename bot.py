@@ -29,6 +29,7 @@ from discord.ext import commands, tasks
 
 channels_path = Path(__file__).parent / "categories.txt"
 notifs_path = Path(__file__).parent / "notify.json"
+channel_sars = Path(__file__).parent / "channel_roles.json"
 
 GiB = 1024**3
 
@@ -47,6 +48,24 @@ def save_notifies(notifies: Dict[str, List[int]]):
     with NamedTemporaryFile(mode="w", delete=False) as f:
         json.dump(notifies, f)
     shutil.move(f.name, notifs_path)
+
+
+def get_channel_roles() -> Dict[int, int]:
+    """Get a dict mapping channel ID to role ID."""
+    try:
+        with channel_sars.open() as f:
+            return json.load(f)
+    except (FileNotFoundError, json.decoder.JSONDecodeError):
+        with channel_sars.open("w") as f:
+            json.dump({}, f)
+        return {}
+
+
+def save_channel_roles(channel_roles: Dict[int, int]) -> None:
+    """Save a dict mapping channel ID to role ID."""
+    with NamedTemporaryFile(mode="w", delete=False) as f:
+        json.dump(channel_roles, f)
+    shutil.move(f.name, channel_sars)
 
 
 class ChannelBot(commands.Bot):
@@ -375,6 +394,50 @@ async def rename_channel(ctx, *, name: str):
     prev_name = ctx.channel.name
     await ctx.channel.edit(name=name)
     await ctx.send(f"Renamed channel {prev_name} -> {ctx.channel.mention}.")
+
+
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def assign_channel_role(ctx, role: discord.Role):
+    """Assign a role to the current channel."""
+    channel_roles = get_channel_roles()
+    channel_roles[ctx.channel.id] = role.id
+    save_channel_roles(channel_roles)
+    await ctx.send(f"Assigned role {role.mention} to {ctx.channel.mention}.")
+
+
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def unassign_channel_role(ctx, role: discord.Role):
+    """Unassign roles from the current channel."""
+    channel_roles = get_channel_roles()
+    channel_roles.pop(ctx.channel.id, None)
+    save_channel_roles(channel_roles)
+    await ctx.send("Cleared channel roles.")
+
+
+@bot.command()
+@commands.has_permissions(manage_channels=True)
+async def invite(ctx, user: discord.Member):
+    """Grant a channel role to a user."""
+    channel_role = get_channel_roles().get(ctx.channel.id)
+    if channel_role is None:
+        return
+    role = discord.utils.get(ctx.guild.roles, id=channel_role)
+    await user.add_roles(role)
+    await ctx.send(f"Granted role {role.mention} to {user.mention}. Welcome!")
+
+
+@bot.command()
+@commands.has_permissions(manage_channels=True)
+async def evict(ctx, user: discord.Member):
+    """Remove a channel role from an user."""
+    channel_role = get_channel_roles().get(ctx.channel.id)
+    if channel_role is None:
+        return
+    role = discord.utils.get(ctx.guild.roles, id=channel_role)
+    await user.remove_roles(role)
+    await ctx.send(f"Removed role {role.mention} from {user.mention}.")
 
 
 @bot.command()

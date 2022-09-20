@@ -50,7 +50,7 @@ def save_notifies(notifies: Dict[str, List[int]]):
     shutil.move(f.name, notifs_path)
 
 
-def get_channel_roles() -> Dict[int, int]:
+def get_channel_roles() -> Dict[str, int]:
     """Get a dict mapping channel ID to role ID."""
     try:
         with channel_sars.open() as f:
@@ -61,7 +61,7 @@ def get_channel_roles() -> Dict[int, int]:
         return {}
 
 
-def save_channel_roles(channel_roles: Dict[int, int]) -> None:
+def save_channel_roles(channel_roles: Dict[str, int]) -> None:
     """Save a dict mapping channel ID to role ID."""
     with NamedTemporaryFile(mode="w", delete=False) as f:
         json.dump(channel_roles, f)
@@ -401,7 +401,7 @@ async def rename_channel(ctx, *, name: str):
 async def assign_channel_role(ctx, role: discord.Role):
     """Assign a role to the current channel."""
     channel_roles = get_channel_roles()
-    channel_roles[ctx.channel.id] = role.id
+    channel_roles[str(ctx.channel.id)] = role.id
     save_channel_roles(channel_roles)
     await ctx.send(f"Assigned role {role.mention} to {ctx.channel.mention}.")
 
@@ -411,7 +411,7 @@ async def assign_channel_role(ctx, role: discord.Role):
 async def unassign_channel_role(ctx, role: discord.Role):
     """Unassign roles from the current channel."""
     channel_roles = get_channel_roles()
-    channel_roles.pop(ctx.channel.id, None)
+    channel_roles.pop(str(ctx.channel.id), None)
     save_channel_roles(channel_roles)
     await ctx.send("Cleared channel roles.")
 
@@ -420,10 +420,10 @@ async def unassign_channel_role(ctx, role: discord.Role):
 @commands.has_permissions(manage_channels=True)
 async def invite(ctx, user: discord.Member):
     """Grant a channel role to a user."""
-    channel_role = get_channel_roles().get(ctx.channel.id)
+    channel_role = get_channel_roles().get(str(ctx.channel.id))
     if channel_role is None:
         return
-    role = discord.utils.get(ctx.guild.roles, id=channel_role)
+    role = discord.utils.get(ctx.guild.roles, id=int(channel_role))
     await user.add_roles(role)
     await ctx.send(f"Granted role {role.mention} to {user.mention}. Welcome!")
 
@@ -432,10 +432,10 @@ async def invite(ctx, user: discord.Member):
 @commands.has_permissions(manage_channels=True)
 async def evict(ctx, user: discord.Member):
     """Remove a channel role from an user."""
-    channel_role = get_channel_roles().get(ctx.channel.id)
+    channel_role = get_channel_roles().get(str(ctx.channel.id))
     if channel_role is None:
         return
-    role = discord.utils.get(ctx.guild.roles, id=channel_role)
+    role = discord.utils.get(ctx.guild.roles, id=int(channel_role))
     await user.remove_roles(role)
     await ctx.send(f"Removed role {role.mention} from {user.mention}.")
 

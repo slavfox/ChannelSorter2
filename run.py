@@ -4,6 +4,9 @@
 import os
 from importlib import import_module
 
+import discord
+from tortoise import run_async
+
 from breadbot import BASE_DIR
 
 # import all modules in breadbot.commands
@@ -14,3 +17,14 @@ for module in os.listdir(BASE_DIR / "breadbot" / "commands"):
 from breadbot.bot import bot
 
 bot.run(os.getenv("CHANNELSORTER_TOKEN"))
+
+
+discord.utils.setup_logging()
+
+
+async def runner():
+    async with bot:
+        await bot.start(os.getenv("CHANNELSORTER_TOKEN"), reconnect=True)
+
+
+run_async(runner())

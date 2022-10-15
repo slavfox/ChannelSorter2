@@ -299,3 +299,53 @@ async def sort(ctx: discord.ext.commands.Context):
     )
     await sort_inner(ctx.guild, guild, ctx.channel)
     await ctx.send("Done!")
+
+
+@bot.command()
+@commands.guild_only()
+@check(is_admin_or_channel_owner)
+async def enable_full_perms(ctx: discord.ext.commands.Context):
+    """Opt into full permissions for this channel. Requires 2FA."""
+    project_channel = await ProjectChannel.get_or_none(id=ctx.channel.id)
+    if project_channel is None:
+        await ctx.send("This channel is not a project channel.")
+        return
+
+    role = ctx.guild.get_role(project_channel.owner_role)
+    if role is None:
+        await ctx.send("Project role not found, contact an admin.")
+        return
+
+    await ctx.channel.set_permissions(
+        role,
+        manage_messages=True,
+        manage_channels=True,
+        manage_threads=True,
+        manage_webhooks=True,
+    )
+    await ctx.send("Done!")
+
+
+@bot.command()
+@commands.guild_only()
+@check(is_admin_or_channel_owner)
+async def disable_full_perms(ctx: discord.ext.commands.Context):
+    """Opt out of full permissions and the 2FA requirement for this channel."""
+    project_channel = await ProjectChannel.get_or_none(id=ctx.channel.id)
+    if project_channel is None:
+        await ctx.send("This channel is not a project channel.")
+        return
+
+    role = ctx.guild.get_role(project_channel.owner_role)
+    if role is None:
+        await ctx.send("Project role not found, contact an admin.")
+        return
+
+    await ctx.channel.set_permissions(
+        role,
+        manage_messages=False,
+        manage_channels=False,
+        manage_threads=False,
+        manage_webhooks=False,
+    )
+    await ctx.send("Done!")

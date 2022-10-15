@@ -189,7 +189,7 @@ async def delete_channel_inner(
                         reason="Deleting dead channel",
                     )
                     pings.append(user)
-    await channel.delete()
+    await project_channel.delete()
     io = BytesIO()
     await dump_channel_contents(channel, io)
     io.seek(0)

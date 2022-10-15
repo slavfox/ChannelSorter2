@@ -88,6 +88,12 @@ async def rename_channel(ctx, *, name: str):
     prev_name = ctx.channel.name
     await ctx.channel.edit(name=name)
     await ctx.send(f"Renamed channel {prev_name} -> {ctx.channel.mention}.")
+    pc = await ProjectChannel.get_or_none(id=ctx.channel.id)
+    if pc:
+        role = ctx.guild.get_role(pc.owner_role)
+        if role:
+            await role.edit(name=f"lang: {name}")
+            await ctx.send(f"Renamed role {role.mention} -> {name}.")
 
 
 @bot.command()

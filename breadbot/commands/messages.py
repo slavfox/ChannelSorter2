@@ -4,19 +4,19 @@
 import discord
 from discord.ext import commands
 from discord.ext.commands import check
-from models import AutoThreadChannel, Guild
-from util.channel_sorting import reposition_channel
-from util.discord_objects import (
-    get_archive_category,
-    get_log_channel,
-    get_project_categories,
-)
 
 from breadbot.bot import bot
+from breadbot.models import AutoThreadChannel, Guild
+from breadbot.util.channel_sorting import reposition_channel
 from breadbot.util.checks import (
     guild_supports_project_channels,
     is_admin_or_channel_owner,
     is_thread_op,
+)
+from breadbot.util.discord_objects import (
+    get_archive_category,
+    get_log_channel,
+    get_project_categories,
 )
 
 

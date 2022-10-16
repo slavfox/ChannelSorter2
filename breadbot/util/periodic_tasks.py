@@ -2,11 +2,11 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 from datetime import datetime, timedelta
+from io import BytesIO
 from itertools import chain
 
 import discord
 
-from breadbot.commands.channel_management import delete_channel_inner
 from breadbot.models import Guild, ProjectChannel
 from breadbot.util.discord_objects import (
     clean_get_project_role,
@@ -14,6 +14,7 @@ from breadbot.util.discord_objects import (
     get_archive_channel,
     get_project_categories,
 )
+from breadbot.util.export import dump_channel_contents
 
 
 class MessageFound(Exception):
@@ -84,6 +85,50 @@ async def archive_inactive_inner(
 
     if verbose or archived > 0:
         await log_channel.send(f"Archived {archived} inactive channels.")
+
+
+async def delete_channel_inner(
+    channel: discord.TextChannel,
+    discord_guild: discord.Guild,
+    guild: Guild,
+):
+    """Handle deleting a channel."""
+    pings = []
+    archive_channel = get_archive_channel(discord_guild, guild)
+    if archive_channel is None:
+        await channel.send(
+            "Archive channel not found. Delete this channel manually."
+        )
+        return
+
+    lang_owner_role = discord_guild.get_role(guild.channel_owner_role_id)
+    project_channel = await ProjectChannel.get_or_none(id=channel.id)
+    if project_channel:
+        owner_role = discord.utils.get(
+            discord_guild.roles, id=project_channel.owner_role
+        )
+        if owner_role:
+            roles_to_remove = [owner_role]
+            if lang_owner_role is not None:
+                roles_to_remove.append(lang_owner_role)
+            for user in discord_guild.members:
+                if owner_role in user.roles:
+                    await user.remove_roles(
+                        *roles_to_remove,
+                        reason="Deleting dead channel",
+                    )
+                    pings.append(user)
+    await project_channel.delete()
+    io = BytesIO()
+    await dump_channel_contents(channel, io)
+    io.seek(0)
+    await archive_channel.send(
+        f"Log for {channel.name} "
+        f""
+        f"({', '.join(user.mention for user in pings)}):",
+        file=discord.File(io, filename=f"history_{channel.name}.txt"),
+    )
+    await channel.delete(reason="Deleting dead channel.")
 
 
 async def delete_dead_channels(

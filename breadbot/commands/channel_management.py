@@ -17,11 +17,11 @@ from breadbot.util.checks import (
 )
 from breadbot.util.discord_objects import (
     get_archive_category,
-    get_archive_channel,
     get_log_channel,
     get_project_categories,
 )
 from breadbot.util.export import dump_channel_contents
+from breadbot.util.periodic_tasks import delete_channel_inner
 
 
 @bot.command()
@@ -158,50 +158,6 @@ async def delete_channel(ctx: discord.ext.commands.Context):
     )
 
 
-async def delete_channel_inner(
-    channel: discord.TextChannel,
-    discord_guild: discord.Guild,
-    guild: Guild,
-):
-    """Handle deleting a channel."""
-    pings = []
-    archive_channel = get_archive_channel(discord_guild, guild)
-    if archive_channel is None:
-        await channel.send(
-            "Archive channel not found. Delete this channel manually."
-        )
-        return
-
-    lang_owner_role = discord_guild.get_role(guild.channel_owner_role_id)
-    project_channel = await ProjectChannel.get_or_none(id=channel.id)
-    if project_channel:
-        owner_role = discord.utils.get(
-            discord_guild.roles, id=project_channel.owner_role
-        )
-        if owner_role:
-            roles_to_remove = [owner_role]
-            if lang_owner_role is not None:
-                roles_to_remove.append(lang_owner_role)
-            for user in discord_guild.members:
-                if owner_role in user.roles:
-                    await user.remove_roles(
-                        *roles_to_remove,
-                        reason="Deleting dead channel",
-                    )
-                    pings.append(user)
-    await project_channel.delete()
-    io = BytesIO()
-    await dump_channel_contents(channel, io)
-    io.seek(0)
-    await archive_channel.send(
-        f"Log for {channel.name} "
-        f""
-        f"({', '.join(user.mention for user in pings)}):",
-        file=discord.File(io, filename=f"history_{channel.name}.txt"),
-    )
-    await channel.delete(reason="Deleting dead channel.")
-
-
 @bot.command()
 @commands.guild_only()
 @check(is_admin_or_channel_owner)
@@ -215,40 +171,6 @@ async def export(ctx: discord.ext.commands.Context):
         "✅ Done!",
         file=discord.File(io, filename=f"history.txt"),
     )
-
-
-@bot.listen("on_message")
-async def on_message(message: discord.Message) -> None:
-    """Listen for messages in archived channels to unarchive them."""
-    if (not isinstance(message.guild, discord.Guild)) or message.author.bot:
-        return
-
-    if not isinstance(message.channel, discord.TextChannel):
-        return
-
-    guild = await Guild.get_or_none(id=message.guild.id).prefetch_related(
-        "project_channels", "project_categories"
-    )
-    if not guild:
-        return
-
-    archive_category = get_archive_category(message.guild, guild)
-    if not archive_category:
-        return
-
-    if message.channel.category == archive_category:
-        everyone = discord.utils.get(message.guild.roles, name="@everyone")
-        assert everyone is not None
-        await message.channel.set_permissions(everyone, overwrite=None)
-        await reposition_channel(
-            message.channel, get_project_categories(message.guild, guild)
-        )
-        log_channel = get_log_channel(message.guild, guild)
-        if log_channel:
-            await log_channel.send(
-                f"Channel {message.channel.mention} unarchived."
-            )
-        await message.channel.send("Channel unarchived!")
 
 
 def get_langbot(guild: discord.Guild) -> discord.Member:

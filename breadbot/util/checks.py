@@ -1,6 +1,7 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
+import discord
 from discord.ext.commands import Bot, CheckFailure, Context
 
 from breadbot.models import Guild, ProjectChannel
@@ -53,4 +54,22 @@ async def is_admin_or_channel_owner(ctx: Context[Bot]) -> bool:
         role.id for role in ctx.author.roles
     ]:
         raise CheckFailure("You are not the owner of this channel.")
+    return True
+
+
+async def is_thread_op(ctx: Context[Bot]) -> bool:
+    """
+    Check if the user running the command is the OP of the post the thread was
+    created for.
+    """
+    if not isinstance(ctx.channel, discord.Thread):
+        raise CheckFailure("This command can only be run in a thread.")
+
+    try:
+        starter_message = await ctx.channel.fetch_message(ctx.channel.id)
+    except discord.NotFound:
+        raise CheckFailure("The thread starter message was not found.")
+
+    if starter_message.author != ctx.author:
+        raise CheckFailure("You are not the OP of this thread.")
     return True

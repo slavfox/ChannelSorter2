@@ -35,3 +35,13 @@ class ProjectChannel(Model):
 
     def __str__(self):
         return f"ProjectChannel {self.id}"
+
+
+class AutoThreadChannel(Model):
+    id = fields.BigIntField(pk=True)
+    guild = fields.ForeignKeyField(
+        "models.Guild", related_name="auto_thread_channels"
+    )  # type: ignore
+
+    def __str__(self):
+        return f"AutoThreadChannel {self.id}"

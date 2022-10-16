@@ -5,7 +5,7 @@ import discord
 from discord.ext import commands
 
 from breadbot.bot import bot
-from breadbot.models import Guild, ProjectCategory
+from breadbot.models import AutoThreadChannel, Guild, ProjectCategory
 
 
 @bot.command()
@@ -152,6 +152,48 @@ async def unset_project_categories(ctx, *categories: discord.CategoryChannel):
         cat = await ProjectCategory.get_or_none(id=category.id, guild=guild)
         if not cat:
             await ctx.send(f"{category.name} is not a project category.")
+            continue
+        await cat.delete()
+    await ctx.send(f"Done!")
+
+
+@bot.command()
+@commands.has_permissions(administrator=True)
+@commands.guild_only()
+async def enable_autothreading(ctx, *channels: discord.TextChannel):
+    """Enable autothreading in the given channels."""
+    guild = await Guild.get_or_none(id=ctx.guild.id)
+    if guild is None:
+        await ctx.send(
+            "This server is not registered. Please register a log channel "
+            "first."
+        )
+        return
+    for channel in channels:
+        _, created = await AutoThreadChannel.get_or_create(
+            id=channel.id, guild=guild
+        )
+        if not created:
+            await ctx.send(f"{channel.name} is already autothreading.")
+    await ctx.send(f"Done!")
+
+
+@bot.command()
+@commands.has_permissions(administrator=True)
+@commands.guild_only()
+async def disable_autothreading(ctx, *channels: discord.TextChannel):
+    """Disable autothreading in the given channels."""
+    guild = await Guild.get_or_none(id=ctx.guild.id)
+    if guild is None:
+        await ctx.send(
+            "This server is not registered. Please register a log channel "
+            "first."
+        )
+        return
+    for channel in channels:
+        cat = await AutoThreadChannel.get_or_none(id=channel.id, guild=guild)
+        if not cat:
+            await ctx.send(f"{channel.name} is not autothreading.")
             continue
         await cat.delete()
     await ctx.send(f"Done!")

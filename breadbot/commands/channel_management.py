@@ -226,7 +226,9 @@ async def on_message(message: discord.Message) -> None:
     if not isinstance(message.channel, discord.TextChannel):
         return
 
-    guild = await Guild.get_or_none(id=message.guild.id)
+    guild = await Guild.get_or_none(id=message.guild.id).prefetch_related(
+        "project_channels", "project_categories"
+    )
     if not guild:
         return
 

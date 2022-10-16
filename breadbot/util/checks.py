@@ -66,7 +66,9 @@ async def is_thread_op(ctx: Context[Bot]) -> bool:
         raise CheckFailure("This command can only be run in a thread.")
 
     try:
-        starter_message = await ctx.channel.fetch_message(ctx.channel.id)
+        starter_message = await ctx.channel.parent.fetch_message(
+            ctx.channel.id
+        )
     except discord.NotFound:
         raise CheckFailure("The thread starter message was not found.")
 

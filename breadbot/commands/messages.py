@@ -116,7 +116,8 @@ async def on_message(message: discord.Message) -> None:
     )
     if autothread_channel:
         await message.create_thread(
-            name="Discussion thread", auto_archive_duration=1440
+            name="Discussion thread (run ./rename_thread to rename)",
+            auto_archive_duration=1440,
         )
 
     archive_category = get_archive_category(message.guild, guild)

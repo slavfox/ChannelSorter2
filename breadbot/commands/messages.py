@@ -115,8 +115,12 @@ async def on_message(message: discord.Message) -> None:
         guild=guild,
     )
     if autothread_channel:
+        thread_name = (
+            message.clean_content.split("\n")[0].split("```")[0][:100]
+            or f"{message.author.display_name} discussion thread"
+        )
         thread = await message.create_thread(
-            name="Discussion thread",
+            name=thread_name,
             auto_archive_duration=1440,
         )
         await thread.send(

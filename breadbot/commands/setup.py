@@ -24,9 +24,7 @@ async def get_categories(ctx):
                 await category.delete()
                 continue
             project_categories.append(category_channel.name)
-    await ctx.send(
-        f"Project categories: {[c.name for c in project_categories]}"
-    )
+    await ctx.send(f"Project categories: {project_categories}")
 
 
 @bot.command()

@@ -273,3 +273,12 @@ async def disable_full_perms(ctx: discord.ext.commands.Context):
         manage_webhooks=False,
     )
     await ctx.send("Done!")
+
+
+@bot.command()
+@commands.guild_only()
+@check(is_admin_or_channel_owner)
+async def set_topic(ctx: discord.ext.commands.Context, *, topic: str):
+    """Set the topic of the channel."""
+    await ctx.channel.edit(topic=topic)
+    await ctx.send("Done!")

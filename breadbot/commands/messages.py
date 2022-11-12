@@ -11,7 +11,7 @@ from breadbot.util.channel_sorting import reposition_channel
 from breadbot.util.checks import (
     guild_supports_project_channels,
     is_admin_or_channel_owner,
-    is_thread_op,
+    is_thread_op_or_admin,
 )
 from breadbot.util.discord_objects import (
     get_archive_category,
@@ -79,7 +79,7 @@ async def delete(ctx: discord.ext.commands.Context):
 
 @bot.command()
 @commands.guild_only()
-@check(is_thread_op)
+@check(is_thread_op_or_admin)
 async def rename_thread(ctx: discord.ext.commands.Context, *, name: str):
     """Rename a thread."""
     await ctx.channel.edit(name=name)
@@ -88,11 +88,11 @@ async def rename_thread(ctx: discord.ext.commands.Context, *, name: str):
 
 @bot.command()
 @commands.guild_only()
-@check(is_thread_op)
+@check(is_thread_op_or_admin)
 async def archive_thread(ctx: discord.ext.commands.Context):
     """Archive a thread."""
-    await ctx.channel.edit(archived=True)
     await ctx.message.delete()
+    await ctx.channel.edit(archived=True)
 
 
 @bot.listen("on_message")

@@ -57,11 +57,14 @@ async def is_admin_or_channel_owner(ctx: Context[Bot]) -> bool:
     return True
 
 
-async def is_thread_op(ctx: Context[Bot]) -> bool:
+async def is_thread_op_or_admin(ctx: Context[Bot]) -> bool:
     """
     Check if the user running the command is the OP of the post the thread was
     created for.
     """
+    if ctx.author.guild_permissions.administrator:
+        return True
+
     if not isinstance(ctx.channel, discord.Thread):
         raise CheckFailure("This command can only be run in a thread.")
 

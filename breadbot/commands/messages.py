@@ -101,6 +101,13 @@ async def on_message(message: discord.Message) -> None:
     if (not isinstance(message.guild, discord.Guild)) or message.author.bot:
         return
 
+    print(
+        f"{message.created_at} "
+        f"{message.author.name}#{message.author.discriminator} "
+        f"[#{message.channel.name}]: "
+        f"{message.content}"
+    )
+
     if not isinstance(message.channel, discord.TextChannel):
         return
 

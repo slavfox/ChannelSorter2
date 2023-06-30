@@ -103,6 +103,14 @@ async def goto(
 ):
     """Redirect conversation to a different channel."""
     assert channel != ctx.channel, f"You are already in {channel.mention}."
+    perms = (
+        channel.permissions_for(ctx.author)
+        if isinstance(channel, discord.TextChannel)
+        else channel.parent.permissions_for(ctx.author)
+    )
+    assert (
+        perms.send_messages
+    ), f"You do not have permission to send messages in {channel.mention}."
     target_embed = discord.Embed(
         title=f"COMEFROM {ctx.channel.mention}",
         description=f"{ctx.author.mention} redirected conversation from "

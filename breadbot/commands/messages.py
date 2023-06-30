@@ -102,7 +102,7 @@ async def goto(
     channel: discord.TextChannel | discord.Thread,
 ):
     """Redirect conversation to a different channel."""
-    assert channel != ctx.channel
+    assert channel != ctx.channel, f"You are already in {channel.mention}."
     target_embed = discord.Embed(
         title=f"COMEFROM {ctx.channel.mention}",
         description=f"{ctx.author.mention} redirected conversation from "

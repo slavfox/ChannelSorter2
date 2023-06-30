@@ -107,7 +107,7 @@ async def goto(
         title=f"COMEFROM {ctx.channel.mention}",
         description=f"{ctx.author.mention} redirected conversation from "
         f"{ctx.channel.mention} here.\nClick the title of this embed to "
-        f"see the previous messages in this topic.",
+        f"see the previous messages in this topic:\n\n{ctx.message.jump_url}",
         url=ctx.message.jump_url,
         color=discord.Color.random(),
     )
@@ -115,8 +115,8 @@ async def goto(
     source_embed = discord.Embed(
         title=f"GOTO {channel.mention}",
         description=f"{ctx.author.mention} redirected conversation to "
-        f"{channel.mention}.\nClick the title of this embed to proceed to "
-        f"the continuation of this topic.",
+        f"{channel.mention}.\nClick the title of this embed or the following "
+        f"link to proceed to the continuation of this topic:\n\n{target_msg.jump_url}",
         url=target_msg.jump_url,
         color=discord.Color.random(),
     )

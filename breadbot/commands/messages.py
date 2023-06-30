@@ -95,6 +95,28 @@ async def archive_thread(ctx: discord.ext.commands.Context):
     await ctx.channel.edit(archived=True)
 
 
+@bot.command(aliases=["portal"])
+@commands.guild_only()
+async def goto(
+    ctx: discord.ext.commands.Context, channel: discord.TextChannel
+):
+    """Redirect conversation to a different channel."""
+    target_embed = discord.Embed(
+        title=f"COMEFROM {ctx.channel.mention}",
+        description=f"{ctx.author.mention} redirected conversation from "
+        f"{ctx.channel.mention} here.",
+        url=ctx.message.jump_url,
+    )
+    target_msg = await channel.send(embed=target_embed)
+    source_embed = discord.Embed(
+        title=f"GOTO {channel.mention}",
+        description=f"{ctx.author.mention} redirected conversation to "
+        f"{channel.mention}.",
+        url=target_msg.jump_url,
+    )
+    await ctx.send(embed=source_embed)
+
+
 @bot.listen("on_message")
 async def on_message(message: discord.Message) -> None:
     """Listen for messages in archived channels to unarchive them."""

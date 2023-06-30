@@ -6,7 +6,7 @@ authors = ["Slavfox <slavfoxman@gmail.com>"]
 
 [tool.poetry.dependencies]
 python = "^3.10"
-"discord.py" = "^2.0.1"
+"discord.py" = "^2.3"
 tortoise-orm = "^0.19.2"
 
 [tool.poetry.dev-dependencies]

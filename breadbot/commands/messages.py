@@ -98,21 +98,27 @@ async def archive_thread(ctx: discord.ext.commands.Context):
 @bot.command(aliases=["portal"])
 @commands.guild_only()
 async def goto(
-    ctx: discord.ext.commands.Context, channel: discord.TextChannel
+    ctx: discord.ext.commands.Context,
+    channel: discord.TextChannel | discord.Thread,
 ):
     """Redirect conversation to a different channel."""
+    assert channel != ctx.channel
     target_embed = discord.Embed(
         title=f"COMEFROM {ctx.channel.mention}",
         description=f"{ctx.author.mention} redirected conversation from "
-        f"{ctx.channel.mention} here.",
+        f"{ctx.channel.mention} here.\nClick the title of this embed to "
+        f"see the previous messages in this topic.",
         url=ctx.message.jump_url,
+        color=discord.Color.random(),
     )
     target_msg = await channel.send(embed=target_embed)
     source_embed = discord.Embed(
         title=f"GOTO {channel.mention}",
         description=f"{ctx.author.mention} redirected conversation to "
-        f"{channel.mention}.",
+        f"{channel.mention}.\nClick the title of this embed to proceed to "
+        f"the continuation of this topic.",
         url=target_msg.jump_url,
+        color=discord.Color.random(),
     )
     await ctx.send(embed=source_embed)
 

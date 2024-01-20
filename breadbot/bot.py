@@ -12,6 +12,7 @@ from tortoise import Tortoise
 
 from breadbot import BASE_DIR
 from breadbot.models import Guild
+from breadbot.util.bookmark import maybe_serve_bookmark_request
 from breadbot.util.channel_sorting import reposition_channel
 from breadbot.util.discord_objects import (
     get_log_channel,
@@ -145,3 +146,14 @@ async def on_guild_channel_update(before, after):
         f"Channel {before.mention} was renamed: {before.name} -> {after.name}"
     )
     await reposition_channel(after, categories)
+
+@bot.event
+async def on_raw_reaction_add(payload):
+    """
+    Check for and serve a bookmark request.
+    
+    We make use of the 'on_raw_reaction_add' event as opposed to the 'on_reaction_add' event
+    cuz the latter only triggers for reactions that happen on messages present in the message
+    cache whereas the former is triggered for reactions on every message, no matter how old.
+    """
+    await maybe_serve_bookmark_request(payload)

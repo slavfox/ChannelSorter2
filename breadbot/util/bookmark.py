@@ -4,6 +4,7 @@ import logging
 logger = logging.getLogger()
 
 BOOKMARK_EMOJI = '🔖'
+MAX_EXCERPT_LENGTH = 200
 
 async def maybe_serve_bookmark_request(reaction: discord.RawReactionActionEvent):
     """
@@ -39,10 +40,10 @@ async def maybe_serve_bookmark_request(reaction: discord.RawReactionActionEvent)
     author_line = f"Author: {member.mention}"
     channel_line = f"Channel: {channel_or_thread.jump_url}"
     link_line = f"Message Link: {message.jump_url}"
-    if len(message.content) <= 200:
+    if len(message.content) <= MAX_EXCERPT_LENGTH:
         content = message.content
     else:
-        content = f"{message.content[:200]}..."
+        content = f"{message.content[:MAX_EXCERPT_LENGTH]}..."
 
     embed = discord.Embed(title=f"Bookmark")
     embed.add_field(name="Details", value=f"{author_line}\n{channel_line}\n{link_line}", inline=False)

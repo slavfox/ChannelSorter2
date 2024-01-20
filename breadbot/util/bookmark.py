@@ -37,7 +37,7 @@ async def maybe_serve_bookmark_request(reaction: discord.RawReactionActionEvent)
         logger.error("Failed to fetch message to serve bookmark request.", exc_info=e)
         return
 
-    author_line = f"Author: {member.mention}"
+    author_line = f"Author: {message.author.mention}"
     channel_line = f"Channel: {channel_or_thread.jump_url}"
     link_line = f"Message Link: {message.jump_url}"
     if len(message.content) <= MAX_EXCERPT_LENGTH:

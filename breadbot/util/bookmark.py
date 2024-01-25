@@ -69,6 +69,7 @@ async def maybe_serve_bookmark_request(
         message = await member.send(embed=embed)
     except Exception as e:
         logger.error("Failed DM-ing bookmark to member.", exc_info=e)
+        return
 
     try:
         # Add wastebasket reaction for better UX for deleting the bookmark.
